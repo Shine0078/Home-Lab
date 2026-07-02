@@ -1,0 +1,23 @@
+# Credentials and output
+output/
+*.csv
+!data/*.csv
+
+# Logs
+logs/
+
+# OS files
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# VS Code
+.vscode/
+
+# Hyper-V temporary files
+*.tmp
+*.vhd
+*.vhdx
+*.iso
