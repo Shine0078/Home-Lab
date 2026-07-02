@@ -1,0 +1,84 @@
+```mermaid
+graph TB
+    subgraph "Hyper-V Host (Windows 11 Pro)"
+        Switch["AD-Lab-Switch<br>(Internal, 10.0.0.0/24)"]
+
+        subgraph "DC01 — Domain Controller"
+            direction TB
+            DC_IP["Static: 10.0.0.10"]
+            DC_AD["AD DS — homelab.local"]
+            DC_DNS["DNS Server"]
+            DC_DHCP["DHCP Scope<br>10.0.0.100-200"]
+            DC_GPO["GPO Management"]
+            DC_Mon["WEF Collector<br>ForwardedEvents"]
+        end
+
+        subgraph "WIN11-CLIENT01"
+            direction TB
+            C1_DHCP["DHCP Client"]
+            C1_Joined["Domain Joined<br>OU=Workstations"]
+            C1_USB["USB Restricted<br>GPO Applied"]
+            C1_GPO["gpresult Verified"]
+        end
+
+        subgraph "WIN11-CLIENT02"
+            direction TB
+            C2_DHCP["DHCP Client"]
+            C2_Joined["Domain Joined<br>OU=Workstations"]
+            C2_USB["USB Restricted<br>GPO Applied"]
+        end
+
+        Switch <--> DC01
+        Switch <--> C1[WIN11-CLIENT01]
+        Switch <--> C2[WIN11-CLIENT02]
+    end
+
+    subgraph "Active Directory Structure"
+        Root["DC=homelab,DC=local"]
+        OU_Staff["OU=Staff<br>~45 users"]
+        OU_IT["OU=IT<br>~5 users"]
+        OU_WS["OU=Workstations<br>2 computers"]
+        OU_Groups["OU=Groups<br>7 security groups"]
+        Root --> OU_Staff
+        Root --> OU_IT
+        Root --> OU_WS
+        Root --> OU_Groups
+    end
+
+    subgraph "GPOs Linked"
+        GPO_USB["Restrict-USB-Storage<br>USBSTOR Start=4"]
+        GPO_ASR["Block-AppData-Executables"]
+        GPO_Lock["Screen-Lock-Timeout<br>15 min"]
+        GPO_Banner["Legal-Warning-Banner"]
+        GPO_FW["Windows-Firewall-Hardening"]
+        GPO_Acct["Local-Account-Hardening"]
+        GPO_Svc["Disable-Unnecessary-Services"]
+
+        GPO_USB --> OU_WS
+        GPO_ASR --> OU_WS
+        GPO_Lock --> OU_WS
+        GPO_Svc --> OU_WS
+        GPO_Banner --> Root
+        GPO_FW --> Root
+        GPO_Acct --> Root
+    end
+
+    subgraph "Security Hardening (DC01)"
+        Hard_NTLN["NTLMv2 Only<br>LmCompatibilityLevel=5"]
+        Hard_SMB["SMB Signing Required"]
+        Hard_Spooler["Print Spooler Disabled"]
+        Hard_Audit["12 Audit Categories"]
+        Hard_ASR["7 Defender ASR Rules"]
+        Hard_Log["PS Script Block Logging"]
+    end
+
+    subgraph "RBAC Delegation"
+        RB_IT["GG-IT-Admins<br>FullControl OU=IT"]
+        RB_HD["GG-Helpdesk-Operators<br>ResetPassword + Unlock"]
+        RB_Sales["GG-Sales-Users<br>ReadOnly"]
+        RB_Fin["GG-Finance-Users<br>ReadOnly"]
+    end
+
+    C1 -.->|"WEF Forward"| DC_Mon
+    C2 -.->|"WEF Forward"| DC_Mon
+```
