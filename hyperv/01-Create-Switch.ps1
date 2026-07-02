@@ -5,7 +5,8 @@
 .DESCRIPTION
     Provisions an internal virtual switch named AD-Lab-Switch used by all
     lab VMs (DC01, WIN11-CLIENT01, WIN11-CLIENT02). Idempotent - skips
-    creation if the switch already exists.
+    creation if the switch already exists. Also configures the host-side
+    NAT/IP so the host can communicate with the lab network.
 
 .NOTES
     Run as Administrator on the Hyper-V host.

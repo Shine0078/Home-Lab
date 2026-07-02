@@ -5,7 +5,8 @@
 .DESCRIPTION
     Creates WIN11-CLIENT01 and WIN11-CLIENT02 as Generation 2 VMs with
     4GB RAM, 2 vCPU, and 40GB dynamic VHDX each. Both attach to AD-Lab-Switch.
-    VMs are created without an OS — manual ISO boot + OOBE required.
+    Configures Secure Boot and TPM (required by Windows 11). VMs are created
+    without an OS -- manual ISO boot + OOBE required.
 
 .PARAMETER VMName
     Specific VM name to create. If omitted, creates both clients.
@@ -18,13 +19,13 @@
 #Requires -RunAsAdministrator
 #Requires -Modules Hyper-V
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
 param(
     [ValidateSet('WIN11-CLIENT01', 'WIN11-CLIENT02')]
     [string]$VMName
 )
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
 $SwitchName = 'AD-Lab-Switch'
 $RAM        = 4GB
@@ -71,10 +72,16 @@ function New-ClientVM {
         -MemoryMaximumBytes 8GB `
         -AutomaticCheckpointsEnabled $false
 
+    # Windows 11 requires Secure Boot and TPM 2.0
+    Set-VMFirmware -VMName $Name -EnableSecureBoot On -SecureBootTemplate MicrosoftWindows
+    Set-VMSecurity -VMName $Name -EncryptStateAndVirtualMachineTraffic $true
+
+    # Enable Guest Services for file copy via integration services
     Enable-VMIntegrationService -VMName $Name -Name 'Guest Service Interface'
 
-    Write-Log "Created VM '$Name': ${RAM} RAM, ${CPU} vCPU, ${VHDXSize} VHDX (dynamic)"
-    Write-Log "VHDX: $vhdPath"
+    Write-Log "Created VM '$Name': 4GB RAM, 2 vCPU, 40GB VHDX (dynamic)"
+    Write-Log "  Secure Boot: Enabled (MicrosoftWindows template)"
+    Write-Log "  VHDX: $vhdPath"
 }
 
 try {

@@ -5,7 +5,7 @@
 .DESCRIPTION
     Creates a Generation 2 VM named DC01 with 4GB RAM, 2 vCPU, and a
     60GB dynamic VHDX. Attaches to AD-Lab-Switch. The VM is created
-    without an OS — you must manually attach the Server 2022 ISO and
+    without an OS -- you must manually attach the Server 2022 ISO and
     complete OS installation via OOBE.
 
 .NOTES
@@ -24,7 +24,6 @@ $SwitchName = 'AD-Lab-Switch'
 $RAM        = 4GB
 $CPU        = 2
 $VHDXSize   = 60GB
-$VHDPath    = Join-Path (Get-VMHost -ErrorAction SilentlyContinue).DefaultVirtualHardDiskPath "$VMName.vhdx"
 $LogDir     = Join-Path $PSScriptRoot '..\logs'
 $LogFile    = Join-Path $LogDir 'hyperv-setup.log'
 
@@ -42,14 +41,11 @@ try {
     $existing = Get-VM -Name $VMName -ErrorAction SilentlyContinue
     if ($existing) {
         Write-Log "VM '$VMName' already exists (State: $($existing.State)). Skipping."
-        exit 0
+        return
     }
 
-    # Resolve default VHD path if not set
-    if (-not $VHDPath -or $VHDPath -like '*DC01.vhdx') {
-        $vmHost = Get-VMHost
-        $VHDPath = Join-Path $vmHost.DefaultVirtualHardDiskPath "$VMName.vhdx"
-    }
+    $vmHost = Get-VMHost
+    $VHDPath = Join-Path $vmHost.DefaultVirtualHardDiskPath "$VMName.vhdx"
 
     New-VM -Name $VMName `
         -Generation 2 `
@@ -63,14 +59,14 @@ try {
         -ProcessorCount $CPU `
         -DynamicMemory `
         -MemoryStartupBytes $RAM `
-        -MemoryMinimumBytes 1GB `
+        -MemoryMinimumBytes 512MB `
         -MemoryMaximumBytes 8GB `
         -AutomaticCheckpointsEnabled $false
 
     Enable-VMIntegrationService -VMName $VMName -Name 'Guest Service Interface'
 
-    Write-Log "Created VM '$VMName': ${RAM} RAM, ${CPU} vCPU, ${VHDXSize} VHDX (dynamic)"
-    Write-Log "VHDX: $VHDXPath"
+    Write-Log "Created VM '$VMName': 4GB RAM, 2 vCPU, 60GB VHDX (dynamic)"
+    Write-Log "VHDX: $VHDPath"
     Write-Log "Next step: Attach Windows Server 2022 ISO and install OS."
 }
 catch {
