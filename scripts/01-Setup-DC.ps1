@@ -4,9 +4,10 @@
 
 .DESCRIPTION
     Run ON DC01 after OS installation. Sets static IP, renames computer,
-    installs AD DS + DNS, promotes to new forest homelab.local, and creates
-    OU structure (Staff, IT, Workstations). Idempotent — checks state
-    before each action. Logs to logs/setup-dc.log.
+    installs AD DS + DNS + DHCP, promotes to new forest homelab.local,
+    creates OU structure (Staff, IT, Workstations), and configures a DHCP
+    scope for the lab network (10.0.0.100-200/24). Idempotent -- checks
+    state before each action. Logs to logs/setup-dc.log.
 
 .NOTES
     Run as Administrator on DC01.
@@ -18,13 +19,21 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$DomainName   = 'homelab.local'
+$DomainName    = 'homelab.local'
 $DomainNetBIOS = 'HOMELAB'
-$TargetHost   = 'DC01'
-$StaticIP     = '10.0.0.10'
-$PrefixLength = 24
-$Gateway      = '10.0.0.1'
-$DNSPrimary   = '127.0.0.1'
+$TargetHost    = 'DC01'
+$StaticIP      = '10.0.0.10'
+$PrefixLength  = 24
+$Gateway       = '10.0.0.1'
+$DNSPrimary    = '127.0.0.1'
+
+# DHCP scope parameters
+$DhcpScopeName   = 'AD-Lab-Scope'
+$DhcpStartRange  = '10.0.0.100'
+$DhcpEndRange    = '10.0.0.200'
+$DhcpSubnetMask  = '255.255.255.0'
+$DhcpDnsServer   = '10.0.0.10'
+$DhcpRouter      = '10.0.0.1'
 
 $LogDir  = Join-Path $PSScriptRoot '..\logs'
 $LogFile = Join-Path $LogDir 'setup-dc.log'
@@ -48,25 +57,41 @@ function Test-ADReady {
     }
 }
 
+function Install-FeatureIfMissing {
+    param([string]$FeatureName)
+    $feature = Get-WindowsFeature -Name $FeatureName -ErrorAction SilentlyContinue
+    if (-not $feature) {
+        Write-Log "WARNING: Feature '$FeatureName' not found on this edition. Skipping."
+        return
+    }
+    if (-not $feature.Installed) {
+        Write-Log "Installing $FeatureName..."
+        Install-WindowsFeature -Name $FeatureName -IncludeManagementTools | Out-Null
+        Write-Log "$FeatureName installed."
+    }
+    else {
+        Write-Log "$FeatureName already installed."
+    }
+}
+
 # ── Step 1: Rename Computer ──
 $currentName = $env:COMPUTERNAME
 if ($currentName -ne $TargetHost) {
     Write-Log "Renaming computer from '$currentName' to '$TargetHost'..."
     Rename-Computer -NewName $TargetHost -Force
-    Write-Log "Computer renamed. Reboot required before continuing."
-    Write-Log "After reboot, re-run this script."
-    # Schedule a scheduled task to resume after reboot
+
     $scriptPath = $MyInvocation.MyCommand.Path
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-ExecutionPolicy Bypass -File `"$scriptPath`""
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    Register-ScheduledTask -TaskName 'AD-HomeLab-Resume-DC' -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:COMPUTERNAME\Administrator"
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName 'AD-HomeLab-Resume-DC' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
     Write-Log "Scheduled task 'AD-HomeLab-Resume-DC' created to resume after reboot."
+    Write-Log "Rebooting now. Script will auto-resume on next logon."
     Restart-Computer -Force
     exit 0
 }
 else {
     Write-Log "Computer name is already '$TargetHost'."
-    # Clean up scheduled task if it exists
     Unregister-ScheduledTask -TaskName 'AD-HomeLab-Resume-DC' -Confirm:$false -ErrorAction SilentlyContinue
 }
 
@@ -75,43 +100,44 @@ Write-Log "Configuring static IP: $StaticIP/$PrefixLength..."
 $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
 if (-not $adapter) { throw "No active network adapter found." }
 
-$currentIP = (Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPv4Address -ErrorAction SilentlyContinue).IPAddress
-if ($currentIP -ne $StaticIP) {
-    New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $StaticIP -PrefixLength $PrefixLength -DefaultGateway $Gateway -ErrorAction SilentlyContinue | Out-Null
+$currentIPs = Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue
+$hasTargetIP = $false
+foreach ($ip in $currentIPs) {
+    if ($ip.IPAddress -eq $StaticIP) { $hasTargetIP = $true; break }
+}
+
+if (-not $hasTargetIP) {
+    # Remove any existing IP configuration on this adapter first
+    $existingIPs = Get-NetIPAddress -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue
+    foreach ($ip in $existingIPs) {
+        if ($ip.PrefixOrigin -eq 'Manual' -or $ip.PrefixOrigin -eq 'DHCP') {
+            Remove-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $ip.IPAddress -Confirm:$false -ErrorAction SilentlyContinue
+        }
+    }
+    $existingGateway = Get-NetRoute -InterfaceIndex $adapter.ifIndex -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue
+    if ($existingGateway) {
+        Remove-NetRoute -InterfaceIndex $adapter.ifIndex -DestinationPrefix '0.0.0.0/0' -Confirm:$false -ErrorAction SilentlyContinue
+    }
+
+    New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $StaticIP -PrefixLength $PrefixLength -DefaultGateway $Gateway | Out-Null
     Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $DNSPrimary
     Write-Log "Static IP set to $StaticIP on $($adapter.Name)."
 }
 else {
+    Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $DNSPrimary -ErrorAction SilentlyContinue
     Write-Log "IP already configured as $StaticIP."
 }
 
-# ── Step 3: Install AD DS + DNS ──
-Write-Log "Checking AD DS installation..."
-$adDS = Get-WindowsFeature -Name AD-Domain-Services -ErrorAction SilentlyContinue
-if ($adDS -and -not $adDS.Installed) {
-    Write-Log "Installing AD-Domain-Services..."
-    Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools | Out-Null
-    Write-Log "AD-Domain-Services installed."
-}
-else {
-    Write-Log "AD-Domain-Services already installed."
-}
-
-Write-Log "Checking DNS Server installation..."
-$dns = Get-WindowsFeature -Name DNS -ErrorAction SilentlyContinue
-if ($dns -and -not $dns.Installed) {
-    Write-Log "Installing DNS Server..."
-    Install-WindowsFeature -Name DNS -IncludeManagementTools | Out-Null
-    Write-Log "DNS Server installed."
-}
-else {
-    Write-Log "DNS Server already installed."
-}
+# ── Step 3: Install AD DS + DNS + DHCP ──
+Write-Log "--- Installing Windows Features ---"
+Install-FeatureIfMissing -FeatureName 'AD-Domain-Services'
+Install-FeatureIfMissing -FeatureName 'DNS'
+Install-FeatureIfMissing -FeatureName 'DHCP'
 
 # ── Step 4: Promote to Domain Controller ──
 if (-not (Test-ADReady)) {
     Write-Log "Promoting to Domain Controller (new forest: $DomainName)..."
-    $securePassword = Read-Host -Prompt "Enter DSRM password" -AsSecureString
+    $securePassword = Read-Host -Prompt "Enter DSRM password (min 8 chars)" -AsSecureString
     Install-ADDSForest `
         -DomainName $DomainName `
         -DomainNetbiosName $DomainNetBIOS `
@@ -120,7 +146,6 @@ if (-not (Test-ADReady)) {
         -NoReboot:$false `
         -Force:$true
     Write-Log "Domain Controller promotion initiated. Server will reboot."
-    # After reboot, the DC is ready — OU creation happens next run
     exit 0
 }
 else {
@@ -131,19 +156,21 @@ else {
 Write-Log "Ensuring OU structure exists..."
 Import-Module ActiveDirectory -ErrorAction Stop
 
+$DomainDN = (Get-ADDomain).DistinguishedName
 $ous = @('Staff', 'IT', 'Workstations')
 foreach ($ou in $ous) {
-    $existing = Get-ADOrganizationalUnit -Filter "Name -eq '$ou'" -ErrorAction SilentlyContinue
+    $ouDN = "OU=$ou,$DomainDN"
+    $existing = Get-ADOrganizationalUnit -Filter "DistinguishedName -eq '$ouDN'" -ErrorAction SilentlyContinue
     if (-not $existing) {
-        New-ADOrganizationalUnit -Name $ou -Path "DC=homelab,DC=local" -ProtectedFromAccidentalDeletion $true
-        Write-Log "Created OU: $ou"
+        New-ADOrganizationalUnit -Name $ou -Path $DomainDN -ProtectedFromAccidentalDeletion $true
+        Write-Log "Created OU: $ou ($ouDN)"
     }
     else {
         Write-Log "OU '$ou' already exists."
     }
 }
 
-# ── Step 6: Create DNS Forwarders ──
+# ── Step 6: Configure DNS Forwarders ──
 Write-Log "Configuring DNS forwarders..."
 $forwarders = Get-DnsServerForwarder -ErrorAction SilentlyContinue
 if (-not $forwarders -or $forwarders.IPAddress.Count -eq 0) {
@@ -153,5 +180,54 @@ if (-not $forwarders -or $forwarders.IPAddress.Count -eq 0) {
 else {
     Write-Log "DNS forwarders already configured."
 }
+
+# ── Step 7: Authorize DHCP and Create Scope ──
+Write-Log "Configuring DHCP..."
+Import-Module DnsServer -ErrorAction SilentlyContinue
+
+$dhcpFeature = Get-WindowsFeature -Name DHCP -ErrorAction SilentlyContinue
+if ($dhcpFeature -and $dhcpFeature.Installed) {
+    # Authorize DHCP in AD
+    $dhcpAuthorized = $false
+    try {
+        $dhcpServers = Get-DhcpServerInDC -ErrorAction SilentlyContinue
+        foreach ($srv in $dhcpServers) {
+            if ($srv.IPAddress -eq $StaticIP -or $srv.DnsName -like "*$TargetHost*") {
+                $dhcpAuthorized = $true
+                break
+            }
+        }
+    } catch { }
+
+    if (-not $dhcpAuthorized) {
+        Add-DhcpServerInDC -IPAddress $StaticIP -DnsName "$TargetHost.$DomainName" -ErrorAction SilentlyContinue
+        Write-Log "DHCP server authorized in AD."
+    }
+    else {
+        Write-Log "DHCP server already authorized."
+    }
+
+    # Create scope
+    $existingScope = Get-DhcpServerv4Scope -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $DhcpScopeName }
+    if (-not $existingScope) {
+        Add-DhcpServerv4Scope `
+            -Name $DhcpScopeName `
+            -StartRange $DhcpStartRange `
+            -EndRange $DhcpEndRange `
+            -SubnetMask $DhcpSubnetMask `
+            -State Active
+        Set-DhcpServerv4OptionValue -ScopeId "$StaticIP/$PrefixLength" -DnsServer $DhcpDnsServer -Router $DhcpRouter -ErrorAction SilentlyContinue
+        Write-Log "DHCP scope created: $DhcpStartRange - $DhcpEndRange"
+    }
+    else {
+        Write-Log "DHCP scope '$DhcpScopeName' already exists."
+    }
+}
+else {
+    Write-Log "WARNING: DHCP feature not installed. Skipping scope creation."
+}
+
+# Restart DHCP service to pick up authorization
+Restart-Service DHCPServer -Force -ErrorAction SilentlyContinue
 
 Write-Log "=== DC01 setup complete ==="
