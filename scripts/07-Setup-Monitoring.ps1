@@ -174,7 +174,7 @@ foreach ($evt in $criticalEvents) {
         Write-Log "  Alert task created: $taskName (Event $($evt.EventID) - $($evt.Description))"
     }
     catch {
-        Write-Log "  Alert task creation failed for $taskName: $($_.Exception.Message)" 'WARN'
+            Write-Log "  Alert task creation failed for ${taskName}: $($_.Exception.Message)" 'WARN'
     }
 }
 
