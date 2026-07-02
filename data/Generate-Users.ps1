@@ -6,16 +6,21 @@
     Creates a realistic dataset of 50 AD user accounts spread across
     five departments: IT, Sales, Finance, Ops, HR. Run once to generate
     data/users.csv, then use scripts/04-Create-Users.ps1 to import.
+    Idempotent: regenerates the file each run with new random picks.
+
+.NOTES
+    Part of AD-HomeLab Phase 5.
 #>
 
 Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
 $Departments = @(
-    @{ Name = 'IT';       Titles = @('Systems Administrator','Network Engineer','Help Desk Technician','IT Manager','DevOps Engineer') }
-    @{ Name = 'Sales';    Titles = @('Sales Representative','Account Executive','Sales Manager','Business Development Rep') }
-    @{ Name = 'Finance';  Titles = @('Financial Analyst','Accountant','Controller','Payroll Specialist') }
-    @{ Name = 'Ops';      Titles = @('Operations Manager','Logistics Coordinator','Facilities Specialist','Fleet Manager') }
-    @{ Name = 'HR';       Titles = @('HR Generalist','Recruiter','Benefits Administrator','Training Specialist') }
+    @{ Name = 'IT';      Titles = @('Systems Administrator','Network Engineer','Help Desk Technician','IT Manager','DevOps Engineer') }
+    @{ Name = 'Sales';   Titles = @('Sales Representative','Account Executive','Sales Manager','Business Development Rep') }
+    @{ Name = 'Finance'; Titles = @('Financial Analyst','Accountant','Controller','Payroll Specialist') }
+    @{ Name = 'Ops';     Titles = @('Operations Manager','Logistics Coordinator','Facilities Specialist','Fleet Manager') }
+    @{ Name = 'HR';      Titles = @('HR Generalist','Recruiter','Benefits Administrator','Training Specialist') }
 )
 
 $FirstNames = @(
@@ -60,6 +65,6 @@ for ($i = 0; $i -lt 50; $i++) {
     }
 }
 
-$OutputPath = Join-Path $PSScriptRoot '..\data\users.csv'
-$Users | Export-Csv -Path $OutputPath -NoTypeInformation
+$OutputPath = Join-Path $PSScriptRoot 'users.csv'
+$Users | Export-Csv -Path $OutputPath -NoTypeInformation -Force
 Write-Host "Generated $($Users.Count) users -> $OutputPath"
