@@ -4,8 +4,9 @@ output/
 # Ignore all CSV files (may contain credentials)
 *.csv
 
-# Exception: allow the users data file
+# Exception: allow data files (not credentials)
 !data/users.csv
+!data/monitored-events.csv
 
 # Logs
 logs/

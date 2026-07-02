@@ -1,0 +1,34 @@
+EventID,Category,Description,Severity
+4720,Account Management,User account created,High
+4722,Account Management,User account enabled,Medium
+4723,Account Management,User account password attempt,Medium
+4724,Account Management,User account password reset,High
+4725,Account Management,User account disabled,Medium
+4726,Account Management,User account deleted,Critical
+4727,Account Management,Security group created,Medium
+4728,Account Management,Security group member added,Medium
+4729,Account Management,Security group member removed,Medium
+4730,Account Management,Security group deleted,High
+4731,Account Management,Local group created,Medium
+4732,Account Management,Local group member added,Medium
+4733,Account Management,Local group member removed,Medium
+4734,Account Management,Local group deleted,High
+4735,Account Management,Security group changed,Medium
+4737,Account Management,Security group changed,Medium
+4738,Account Management,User account changed,High
+4740,Account Management,User account locked out,High
+4741,Account Management,Computer account created,Medium
+4742,Account Management,Computer account changed,Medium
+4743,Account Management,Computer account deleted,High
+4624,Logon,Successful logon,Informational
+4625,Logon,Failed logon,High
+4634,Logon,Account logoff,Informational
+4648,Logon,Logon with explicit credentials,High
+4672,Privilege Use,Special privileges assigned,High
+4688,Detailed Tracking,Process created,Informational
+4697,Service Installation,Service installed,Medium
+4719,Policy Change,Audit policy changed,Critical
+4739,Policy Change,Domain policy changed,Critical
+4740,Account Management,Account locked out,High
+6416,Device Events,External device recognized,Medium
+1102,Audit,Audit log cleared,Critical
