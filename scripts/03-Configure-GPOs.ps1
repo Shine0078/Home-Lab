@@ -135,8 +135,8 @@ foreach ($client in $clients) {
             Write-Log "GPUpdate triggered on $client (via Invoke-Command fallback)"
         }
         catch {
-            Write-Log "WARNING: Could not trigger gpupdate on $client: $($_.Exception.Message)"
-            Write-Log "  Run 'gpupdate /force' manually on $client"
+            Write-Log "WARNING: Could not trigger gpupdate on ${client}: $($_.Exception.Message)"
+            Write-Log "  Run 'gpupdate /force' manually on ${client}"
         }
     }
 }
