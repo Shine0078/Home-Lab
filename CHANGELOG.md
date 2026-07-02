@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-07-02
+
+### Added — Phase 7: DSC
+- DSC configuration (`dsc/LabDscConfiguration.ps1`) declaring desired state for DC01 using xActiveDirectory, xDhcpServer, xNetworking resources
+- DSC runner (`dsc/Start-DscRun.ps1`) with auto-install of resource modules
+
+### Added — Phase 8: Security Hardening & Monitoring
+- Security hardening script (`scripts/06-Harden-Baseline.ps1`) with 19 STIG/CIS-inspired controls
+- Monitoring script (`scripts/07-Setup-Monitoring.ps1`) with WEF collector, event subscription, alert tasks
+- Monitored events dataset (`data/monitored-events.csv`) with 32 security event IDs
+- Security baseline documentation (`docs/security-baseline.md`) with control-to-standard mapping
+- Security dashboard documentation (`docs/security-dashboard.md`) with WEF architecture
+
+### Added — Phase 9: Disaster Recovery
+- Backup script (`scripts/08-Backup-Lab.ps1`) for GPOs, AD users, groups, DNS, OUs, policy, VM checkpoints
+- Restore script (`scripts/09-Restore-Lab.ps1`) with idempotent restore from timestamped backup
+- Backup strategy documentation (`docs/backup-strategy.md`) with RPO/RTO and 4 recovery scenarios
+
+### Added — Phase 10: Advanced GPOs & RBAC
+- 6 advanced GPOs (`scripts/10-Advanced-GPOs.ps1`): ASR, screen lock, legal banner, account hardening, firewall, service disable
+- RBAC script (`scripts/11-Setup-RBAC.ps1`) with 7 security groups and OU-level ACL delegation
+- RBAC matrix documentation (`docs/rbac-matrix.md`)
+
+### Added — Infrastructure
+- PowerShell module (`modules/ADHomeLab/`) with 7 shared functions
+- Vagrant alternative (`Vagrantfile` + `vagrant/`) with Hyper-V provider
+- Unattend XML files for automated OS installation (Server 2022 + Win11)
+- ISO attach script (`hyperv/04-Attach-ISO.ps1`) for push-button deployment
+- GPO exports directory (`config/gpo-exports/`)
+
+### Added — Testing
+- Pester tests with AD/GPO mocks (`tests/04-Create-Users.Tests.ps1`, `tests/03-Configure-GPOs.Tests.ps1`)
+- Password complexity statistical tests (1000 iterations, `tests/04-Create-Users.Password.Tests.ps1`)
+- Expanded Pester tests covering data/ and tests/ directories
+
+### Added — Documentation
+- Mermaid architecture diagram (`docs/architecture.mmd`)
+- Draw.io architecture source (`docs/architecture.drawio`)
+- Demo script for interviews (`docs/demo-script.md`)
+- Interview prep with 20+ Q&A (`docs/interview-prep.md`)
+- Cost analysis comparing on-prem, Azure, AWS (`docs/cost-analysis.md`)
+- 6 operational runbooks (`docs/runbooks/RB-001` through `RB-006`)
+- CONTRIBUTING.md and CODE_OF_CONDUCT.md
+- README badges (CI, license, PowerShell, Pester) and Quick Start section
+
+### Changed
+- CI workflow now runs Pester tests after lint
+- README updated with badges, quick start, architecture diagram, doc index
+- PROJECT.md expanded with phases 7-10, new repo structure, 30-entry skills table
+
 ## [0.2.0] - 2026-07-02
 
 ### Fixed
