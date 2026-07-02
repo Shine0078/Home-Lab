@@ -106,8 +106,10 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 |--------|-------------|
 | `hyperv/01-Create-Switch.ps1` | Creates AD-Lab-Switch (internal) |
 | `hyperv/02-Provision-DC01.ps1` | Creates DC01 VM (4GB, 2 CPU, 60GB) |
-| `hyperv/03-Provision-Clients.ps1` | Creates WIN11-CLIENT01/02 (4GB, 2 CPU, 40GB) |
-| `hyperv/Provision-All.ps1` | Runs all three in sequence |
+| `hyperv/03-Provision-Clients.ps1` | Creates WIN11-CLIENT01/02 (4GB, 2 CPU, 40GB, TPM/SecureBoot) |
+| `hyperv/04-Attach-ISO.ps1` | Attaches ISOs + unattend.xml for automated OS install |
+| `hyperv/Provision-All.ps1` | Runs all provisioning in sequence |
+| `hyperv/unattend/*.xml` | Unattend answer files for Server 2022 and Win11 |
 
 ### Phase 2 — Domain Controller Setup
 
@@ -156,6 +158,50 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 - GPO application verified via gpresult on a client
 - AD user count >= 50 in OU=Staff and OU=IT
 
+### Phase 7 — DSC (Declarative Configuration)
+
+`dsc/LabDscConfiguration.ps1` provides a declarative alternative:
+- Same desired state as imperative scripts using xActiveDirectory, xDhcpServer, xNetworking DSC resources
+- Supports drift detection via `Test-DscConfiguration`
+- Run via `dsc/Start-DscRun.ps1`
+
+### Phase 8 — Security Hardening & Monitoring
+
+`scripts/06-Harden-Baseline.ps1` applies STIG/CIS-inspired controls:
+- NTLMv2-only (LmCompatibilityLevel=5)
+- SMB signing required
+- Print Spooler disabled (PrintNightmare mitigation)
+- 12 audit categories via auditpol
+- 7 Windows Defender ASR rules + Controlled Folder Access
+- Guest account disabled, anonymous LDAP restricted
+- PowerShell script block logging enabled
+- See `docs/security-baseline.md` for control-to-standard mapping
+
+`scripts/07-Setup-Monitoring.ps1` configures:
+- Windows Event Forwarding (WEF) collector on DC01
+- SourceInitiated subscription for 32 security event types
+- Alert scheduled tasks for critical events
+- See `docs/security-dashboard.md` for monitoring architecture
+
+### Phase 9 — Disaster Recovery
+
+`scripts/08-Backup-Lab.ps1` and `scripts/09-Restore-Lab.ps1`:
+- Backup: GPOs, AD users, group memberships, DNS records, OU structure, password policy, VM checkpoints
+- Restore: GPOs (Import-GPO), users (re-create with temp passwords), password policy (from XML)
+- See `docs/backup-strategy.md` for RPO/RTO targets and 4 recovery scenarios
+
+### Phase 10 — Advanced GPOs & RBAC
+
+`scripts/10-Advanced-GPOs.ps1` creates 6 additional GPOs:
+- Block-AppData-Executables, Screen-Lock-Timeout, Legal-Warning-Banner
+- Local-Account-Hardening, Windows-Firewall-Hardening, Disable-Unnecessary-Services
+
+`scripts/11-Setup-RBAC.ps1` creates:
+- 7 security groups (GG-IT-Admins, GG-Helpdesk-Operators, etc.)
+- OU-level delegation via AD ACLs (ResetPassword, UnlockAccount, FullControl, ReadOnly)
+- Auto-populates group memberships from user Department attribute
+- See `docs/rbac-matrix.md` for delegation matrix
+
 ## GPO Details
 
 ### Restrict-USB-Storage
@@ -186,20 +232,31 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 
 ```
 AD-HomeLab/
-├── .github/workflows/    # CI: PSScriptAnalyzer linting
-├── data/                 # User CSV dataset
-├── docs/screenshots/     # Placeholder for screenshots
-├── hyperv/               # Hyper-V provisioning scripts
+├── .github/workflows/    # CI: PSScriptAnalyzer linting + Pester tests
+├── config/gpo-exports/   # GPO backup export directory
+├── data/                 # User CSV + monitored events dataset
+├── docs/                 # Architecture, runbooks, security, cost, demo
+│   ├── screenshots/      # Screenshot placeholders
+│   └── runbooks/         # 6 operational runbooks (RB-001 to RB-006)
+├── dsc/                  # Desired State Configuration (declarative)
+├── hyperv/               # Hyper-V provisioning + unattend XMLs + ISO attach
 ├── logs/                 # Runtime logs (gitignored)
-├── output/               # Credential reports (gitignored)
-├── scripts/              # Domain config, GPO, users, validation
-├── tests/                # Pester tests
+├── modules/ADHomeLab/    # PowerShell module (shared functions)
+├── output/               # Credential reports + backups (gitignored)
+├── scripts/              # 11 scripts: DC, join, GPO, users, validation,
+│                         #   hardening, monitoring, backup, restore,
+│                         #   advanced GPOs, RBAC
+├── tests/                # Pester tests (syntax, help, data, mocks)
+├── vagrant/              # Vagrant alternative with Hyper-V provider
 ├── .gitignore
 ├── .gitattributes
 ├── CHANGELOG.md
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
 ├── LICENSE
 ├── PROJECT.md            # This file
-└── README.md
+├── README.md
+└── Vagrantfile
 ```
 
 ## Screenshots
@@ -266,18 +323,33 @@ This project maps directly to real-world sysadmin and infrastructure skills:
 | Component | Skill Demonstrated |
 |-----------|-------------------|
 | Hyper-V provisioning | Infrastructure-as-Code, VM lifecycle management |
+| Unattend.xml + ISO attach | Automated OS deployment, UEFI partitioning |
 | Static IP + DNS | Network configuration, DNS architecture |
 | DHCP scope + authorization | IP address management, AD-integrated DHCP |
 | AD DS promotion | Domain controller deployment, forest design |
 | OU structure | Organizational unit design, delegation model |
 | GPO creation + linking | Group Policy management, security hardening |
+| Advanced GPOs (6 additional) | Enterprise policy design, ASR, firewall, banner |
 | USB restriction | Endpoint security, registry-based policy |
 | Password policy | Account security, compliance controls |
+| STIG/CIS hardening | Security baselines, NTLMv2, SMB signing, auditpol |
+| Defender ASR rules | Attack surface reduction, ransomware protection |
+| Windows Event Forwarding | Centralized log management, SIEM-like architecture |
+| Alert scheduled tasks | Automated incident response triggers |
 | Bulk user creation | Automation, scripting at scale |
+| RBAC + OU delegation | Least-privilege design, AD ACLs, extended rights |
+| DSC configuration | Declarative config management, drift detection |
+| Backup/restore scripts | Business continuity, disaster recovery |
+| RPO/RTO documentation | Business continuity planning |
 | Idempotent scripts | Safe re-runnable automation |
 | Validation script | Infrastructure testing, health checks |
-| CI pipeline | Code quality enforcement |
-| Pester tests | Automated testing for PowerShell |
+| PowerShell module | Code reuse, packaging, API design |
+| Vagrant alternative | DevOps tooling, cross-platform IaC |
+| CI pipeline | Code quality enforcement, automated testing |
+| Pester tests with mocks | Test-driven infrastructure, unit testing |
+| Runbooks (6) | Operational documentation, SOPs |
+| Architecture diagrams | Mermaid, Draw.io, visual communication |
+| Cost analysis | Cloud awareness, financial reasoning |
 
 ## License
 
