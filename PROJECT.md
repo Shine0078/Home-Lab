@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project provisions a complete Active Directory environment on a single Hyper-V host for learning, testing, and portfolio demonstration. It automates VM creation, domain controller setup, client domain joins, GPO enforcement, and bulk user creation using idempotent PowerShell scripts.
+This project provisions a complete Active Directory environment on a single Hyper-V host for learning, testing, and portfolio demonstration. It automates VM creation, domain controller setup, client domain joins, GPO enforcement, and bulk user creation using idempotent PowerShell scripts, while keeping initial OS installation and WinRM enablement explicit and documented.
 
 ## Architecture
 
@@ -100,6 +100,10 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 
 ## Script Details
 
+### Phase 0 — Cleanup / Teardown
+
+`scripts/00-Teardown-Lab.ps1` removes lab-only AD users, groups, GPOs, and monitoring tasks. Use `-WhatIf` first.
+
 ### Phase 1 — Hyper-V Provisioning
 
 | Script | Description |
@@ -107,7 +111,7 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 | `hyperv/01-Create-Switch.ps1` | Creates AD-Lab-Switch (internal) |
 | `hyperv/02-Provision-DC01.ps1` | Creates DC01 VM (4GB, 2 CPU, 60GB) |
 | `hyperv/03-Provision-Clients.ps1` | Creates WIN11-CLIENT01/02 (4GB, 2 CPU, 40GB, TPM/SecureBoot) |
-| `hyperv/04-Attach-ISO.ps1` | Attaches ISOs + unattend.xml for automated OS install |
+| `hyperv/04-Attach-ISO.ps1` | Attaches ISOs and stages unattend media for OS installation |
 | `hyperv/Provision-All.ps1` | Runs all provisioning in sequence |
 | `hyperv/unattend/*.xml` | Unattend answer files for Server 2022 and Win11 |
 
@@ -243,7 +247,7 @@ AD-HomeLab/
 ├── logs/                 # Runtime logs (gitignored)
 ├── modules/ADHomeLab/    # PowerShell module (shared functions)
 ├── output/               # Credential reports + backups (gitignored)
-├── scripts/              # 11 scripts: DC, join, GPO, users, validation,
+├── scripts/              # 12 scripts: teardown, DC, join, GPO, users, validation,
 │                         #   hardening, monitoring, backup, restore,
 │                         #   advanced GPOs, RBAC
 ├── tests/                # Pester tests (syntax, help, data, mocks)
@@ -311,10 +315,16 @@ Ensure the static IP is configured and the network adapter is up before promotio
 - Restart DHCP service: `Restart-Service DHCPServer -Force`
 
 ### Windows 11 Installation Fails (TPM/Secure Boot)
-- Ensure the client VM has TPM enabled: `Get-VMSecurity -VMName WIN11-CLIENT01`
+- Ensure the client VM has TPM enabled: `Get-VMKeyProtector -VMName WIN11-CLIENT01`
 - Verify Secure Boot template: `Get-VMFirmware -VMName WIN11-CLIENT01`
-- If TPM is missing, the provisioning script sets it via Set-VMSecurity
+- If the VM was created before the hardening pass, rerun `scripts/00-Teardown-Lab.ps1` for lab objects and recreate the VM so `Enable-VMTPM` is applied cleanly
 - Host must support TPM 2.0 and virtualization-based security
+
+### Lab Scripts Stop on Missing Dependencies
+- If `PSScriptAnalyzer` is not installed, use the bundled copy under `.tools/PSScriptAnalyzer`
+- If DSC errors mention `xActiveDirectory`, `xDhcpServer`, or `xNetworking`, install those modules before running `dsc/Start-DscRun.ps1`
+- If WEF setup fails, confirm `Windows-Event-Collector` is available and WinRM is enabled on the collector and clients
+- If DHCP scope creation fails, verify the script is using network `10.0.0.0/24` and not the host IP as the scope ID
 
 ## What This Demonstrates
 
@@ -323,7 +333,7 @@ This project maps directly to real-world sysadmin and infrastructure skills:
 | Component | Skill Demonstrated |
 |-----------|-------------------|
 | Hyper-V provisioning | Infrastructure-as-Code, VM lifecycle management |
-| Unattend.xml + ISO attach | Automated OS deployment, UEFI partitioning |
+| Unattend.xml + ISO attach | Semi-automated OS deployment, UEFI partitioning |
 | Static IP + DNS | Network configuration, DNS architecture |
 | DHCP scope + authorization | IP address management, AD-integrated DHCP |
 | AD DS promotion | Domain controller deployment, forest design |

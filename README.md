@@ -13,7 +13,7 @@ A fully scripted, portfolio-grade Active Directory home lab built on Hyper-V wit
 # 1. Provision VMs (Hyper-V host, as Admin)
 .\hyperv\Provision-All.ps1
 
-# 2. Attach ISOs for automated OS install
+# 2. Attach installation media and complete OS install
 .\hyperv\04-Attach-ISO.ps1 -ServerISO C:\path\to\Server2022.iso -Win11ISO C:\path\to\Win11.iso
 
 # 3. Setup domain controller (on DC01, as Admin)
@@ -34,7 +34,7 @@ See [PROJECT.md](PROJECT.md) for full documentation, prerequisites, and step-by-
 
 | Component | Description |
 |-----------|-------------|
-| `hyperv/` | Hyper-V VM provisioning + unattend.xml + ISO attach |
+| `hyperv/` | Hyper-V VM provisioning + installation media staging |
 | `scripts/` | DC setup, domain join, GPOs, security, users, monitoring, backup, RBAC |
 | `dsc/` | Desired State Configuration (declarative alternative) |
 | `modules/` | ADHomeLab PowerShell module (shared functions) |

@@ -1,15 +1,15 @@
-<#
+﻿<#
 .SYNOPSIS
-    Attaches ISOs and unattend files to all lab VMs and starts automated OS installation.
+    Attaches ISOs and unattend staging media to all lab VMs.
 
 .DESCRIPTION
     For each VM (DC01, WIN11-CLIENT01, WIN11-CLIENT02), this script:
-      1. Creates a FAT-formatted VFD (virtual floppy) containing autounattend.xml
-      2. Attaches the VFD and the appropriate OS ISO to the VM
+      1. Stages autounattend.xml on a temporary FAT-formatted VHDX
+      2. Attaches the appropriate OS ISO to the VM
       3. Sets the VM boot order to boot from DVD first
       4. Starts the VM
-    This eliminates the manual OOBE step. After OS installation completes
-    and WinRM is reachable, run scripts/01-Setup-DC.ps1 etc.
+    The initial OOBE / setup screens still require human completion unless
+    you rebuild the media with an external ISO authoring tool.
 
 .PARAMETER ServerISO
     Path to the Windows Server 2022 ISO file.
@@ -52,10 +52,11 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 function New-UnattendVFD {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     <#
     Creates a VHD (used as a virtual floppy) containing autounattend.xml.
     Hyper-V Gen2 VMs don't support floppy drives, so we use a small VHD
@@ -67,24 +68,27 @@ function New-UnattendVFD {
         [string]$OutputPath
     )
 
-    # Create a 4MB VHD
-    $vhdPath = Join-Path $OutputPath 'autounattend.vhd'
-    New-VHD -Path $vhdPath -SizeBytes 4MB -Dynamic -ErrorAction SilentlyContinue | Out-Null
+    if ($PSCmdlet.ShouldProcess($OutputPath, 'Create unattend staging volume')) {
+        # Create a 4MB VHD
+        $vhdPath = Join-Path $OutputPath 'autounattend.vhdx'
+        New-VHD -Path $vhdPath -SizeBytes 4MB -Dynamic -ErrorAction SilentlyContinue | Out-Null
 
-    # Mount, format as FAT32, copy file, dismount
-    $mount = Mount-VHD -Path $vhdPath -PassThru
-    $disk = $mount | Get-Disk
-    $partition = $disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -UseMaximumSize -AssignDriveLetter
-    Format-Volume -DriveLetter $partition.DriveLetter -FileSystem FAT32 -NewFileSystemLabel 'UNATTEND' -Force | Out-Null
+        # Mount, format as FAT32, copy file, dismount
+        $mount = Mount-VHD -Path $vhdPath -PassThru
+        $disk = $mount | Get-Disk
+        $partition = $disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -UseMaximumSize -AssignDriveLetter
+        Format-Volume -DriveLetter $partition.DriveLetter -FileSystem FAT32 -NewFileSystemLabel 'UNATTEND' -Force | Out-Null
 
-    $destPath = "$($partition.DriveLetter):\autounattend.xml"
-    Copy-Item -Path $UnattendPath -Destination $destPath -Force
+        $destPath = "$($partition.DriveLetter):\autounattend.xml"
+        Copy-Item -Path $UnattendPath -Destination $destPath -Force
 
-    Dismount-VHD -Path $vhdPath
-    return $vhdPath
+        Dismount-VHD -Path $vhdPath
+        return $vhdPath
+    }
 }
 
 function Set-VMISOAttachment {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$Name,
         [string]$ISOPath,
@@ -107,38 +111,40 @@ function Set-VMISOAttachment {
     $unattendDir = Join-Path $PSScriptRoot 'unattend'
     $vhdPath = New-UnattendVFD -UnattendPath $UnattendFile -OutputPath $unattendDir
 
-    # Remove existing DVD drives
-    $dvdDrives = Get-VMDvdDrive -VMName $Name -ErrorAction SilentlyContinue
-    if ($dvdDrives) {
-        $dvdDrives | Remove-VMDvdDrive -ErrorAction SilentlyContinue
-    }
+    if ($PSCmdlet.ShouldProcess($Name, 'Attach installation media and start VM')) {
+        # Remove existing DVD drives
+        $dvdDrives = Get-VMDvdDrive -VMName $Name -ErrorAction SilentlyContinue
+        if ($dvdDrives) {
+            $dvdDrives | Remove-VMDvdDrive -ErrorAction SilentlyContinue
+        }
 
-    # Attach ISO as DVD
-    Add-VMDvdDrive -VMName $Name -Path $ISOPath
-    Write-Log "Attached ISO to ${Name}: $ISOPath"
+        # Attach ISO as DVD
+        Add-VMDvdDrive -VMName $Name -Path $ISOPath
+        Write-Log "Attached ISO to ${Name}: $ISOPath"
 
-    # Attach unattend VHD
-    Add-VMHardDiskDrive -VMName $Name -Path $vhdPath -ControllerType SCSI -ErrorAction SilentlyContinue
-    Write-Log "Attached unattend VHD to ${Name}"
+        # Attach unattend VHD
+        Add-VMHardDiskDrive -VMName $Name -Path $vhdPath -ControllerType SCSI -ErrorAction SilentlyContinue
+        Write-Log "Attached unattend VHD to ${Name}"
 
-    # Set boot order: DVD first
-    $dvdDrive = Get-VMDvdDrive -VMName $Name | Select-Object -First 1
-    if ($dvdDrive) {
-        Set-VMFirmware -VMName $Name -FirstBootDevice $dvdDrive
-        Write-Log "Set boot order: DVD first for ${Name}"
-    }
+        # Set boot order: DVD first
+        $dvdDrive = Get-VMDvdDrive -VMName $Name | Select-Object -First 1
+        if ($dvdDrive) {
+            Set-VMFirmware -VMName $Name -FirstBootDevice $dvdDrive
+            Write-Log "Set boot order: DVD first for ${Name}"
+        }
 
-    # Start VM
-    if ($vm.State -ne 'Running') {
-        Start-VM -VMName $Name
-        Write-Log "Started VM: ${Name}"
-    }
-    else {
-        Write-Log "VM ${Name} already running."
+        # Start VM
+        if ($vm.State -ne 'Running') {
+            Start-VM -VMName $Name
+            Write-Log "Started VM: ${Name}"
+        }
+        else {
+            Write-Log "VM ${Name} already running."
+        }
     }
 }
 
-# ── Validate ISOs ──
+# â”€â”€ Validate ISOs â”€â”€
 if (-not (Test-Path $ServerISO)) { throw "Server ISO not found: $ServerISO" }
 if (-not (Test-Path $Win11ISO))  { throw "Win11 ISO not found: $Win11ISO" }
 
@@ -159,5 +165,5 @@ foreach ($config in $vmConfigs) {
 }
 
 Write-Log "=== ISO attachment complete ==="
-Write-Log "OS installation will proceed automatically. Wait 10-15 min per VM."
+Write-Log "OS installation still requires manual completion at the OOBE stage."
 Write-Log "Verify WinRM: Test-WSMan -ComputerName <VM-IP>"

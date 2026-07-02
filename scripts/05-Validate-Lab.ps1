@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Validates the AD HomeLab environment.
 
@@ -25,7 +25,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$DomainName = 'homelab.local'
 $LogDir     = Join-Path $PSScriptRoot '..\logs'
 $LogFile    = Join-Path $LogDir 'validation.log'
 
@@ -37,10 +36,10 @@ function Write-Log {
     $entry = "[$timestamp] [$Level] $Message"
     Add-Content -Path $LogFile -Value $entry
     switch ($Level) {
-        'PASS'  { Write-Host "  [PASS] $Message" -ForegroundColor Green }
-        'FAIL'  { Write-Host "  [FAIL] $Message" -ForegroundColor Red }
-        'WARN'  { Write-Host "  [WARN] $Message" -ForegroundColor Yellow }
-        default { Write-Host "  $Message" -ForegroundColor Cyan }
+        'PASS'  { Write-Output "  [PASS] $Message" -ForegroundColor Green }
+        'FAIL'  { Write-Output "  [FAIL] $Message" -ForegroundColor Red }
+        'WARN'  { Write-Output "  [WARN] $Message" -ForegroundColor Yellow }
+        default { Write-Output "  $Message" -ForegroundColor Cyan }
     }
 }
 
@@ -51,15 +50,15 @@ function Add-Result {
     [void]$results.Add([PSCustomObject]@{ Test = $TestName; Passed = $Passed })
 }
 
-Write-Host ""
-Write-Host "========================================" -ForegroundColor White
-Write-Host "  AD-HomeLab Validation" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor White
+Write-Output ""
+Write-Output "========================================" -ForegroundColor White
+Write-Output "  AD-HomeLab Validation" -ForegroundColor Cyan
+Write-Output "========================================" -ForegroundColor White
 
 Import-Module ActiveDirectory -ErrorAction Stop
 Import-Module GroupPolicy -ErrorAction Stop
 
-# ── Test 1: Domain Controller exists ──
+# â”€â”€ Test 1: Domain Controller exists â”€â”€
 Write-Log "Checking domain controller..."
 try {
     $dc = Get-ADDomainController -Filter * -ErrorAction Stop | Where-Object { $_.HostName -like "*$env:COMPUTERNAME*" }
@@ -75,7 +74,7 @@ try {
     Add-Result "Domain Controller exists" $false
 }
 
-# ── Test 2: OU Structure ──
+# â”€â”€ Test 2: OU Structure â”€â”€
 Write-Log "Checking OU structure..."
 $ous = @('Staff', 'IT', 'Workstations')
 $allOUsExist = $true
@@ -90,7 +89,7 @@ foreach ($ou in $ous) {
 }
 Add-Result "OU structure (Staff, IT, Workstations)" $allOUsExist
 
-# ── Test 3: Client Domain Join ──
+# â”€â”€ Test 3: Client Domain Join â”€â”€
 Write-Log "Checking client domain join status..."
 $clients = @('WIN11-CLIENT01', 'WIN11-CLIENT02')
 $joinedClients = 0
@@ -106,7 +105,7 @@ foreach ($client in $clients) {
     }
 }
 
-# ── Test 4: Password Policy ──
+# â”€â”€ Test 4: Password Policy â”€â”€
 Write-Log "Checking password policy..."
 $policy = Get-ADDefaultDomainPasswordPolicy -ErrorAction Stop
 $pwTests = @(
@@ -125,7 +124,7 @@ foreach ($test in $pwTests) {
     Add-Result "Password Policy: $($test.Name)" $test.Pass
 }
 
-# ── Test 5: GPO Existence and Link ──
+# â”€â”€ Test 5: GPO Existence and Link â”€â”€
 Write-Log "Checking GPOs..."
 $expectedGPOs = @('Restrict-USB-Storage')
 foreach ($gpoName in $expectedGPOs) {
@@ -155,7 +154,7 @@ foreach ($gpoName in $expectedGPOs) {
     }
 }
 
-# ── Test 6: USB Storage Registry Value in GPO ──
+# â”€â”€ Test 6: USB Storage Registry Value in GPO â”€â”€
 Write-Log "Checking USB storage restriction GPO registry value..."
 try {
     $regValue = Get-GPRegistryValue -Name 'Restrict-USB-Storage' `
@@ -173,7 +172,7 @@ try {
     Add-Result "USB storage disabled via GPO registry" $false
 }
 
-# ── Test 7: USB Storage on Client (if reachable) ──
+# â”€â”€ Test 7: USB Storage on Client (if reachable) â”€â”€
 Write-Log "Checking USB storage on client via remote registry..."
 if ($joinedClients -gt 0) {
     $testClient = $clients[0]
@@ -198,7 +197,7 @@ if ($joinedClients -gt 0) {
     Add-Result "USB storage disabled on client" $false
 }
 
-# ── Test 8: GPO Application on Client (gpresult) ──
+# â”€â”€ Test 8: GPO Application on Client (gpresult) â”€â”€
 Write-Log "Checking GPO application on client..."
 if ($joinedClients -gt 0) {
     $testClient = $clients[0]
@@ -223,7 +222,7 @@ if ($joinedClients -gt 0) {
     Add-Result "GPO applied on client (gpresult)" $false
 }
 
-# ── Test 9: User Count ──
+# â”€â”€ Test 9: User Count â”€â”€
 Write-Log "Checking AD user count..."
 $allUsers = Get-ADUser -Filter * -ErrorAction SilentlyContinue
 $customUsers = $allUsers | Where-Object {
@@ -239,11 +238,11 @@ if ($customCount -ge 50) {
     Add-Result "User count >= 50" $false
 }
 
-# ── Summary ──
-Write-Host ""
-Write-Host "========================================" -ForegroundColor White
-Write-Host "  Validation Summary" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor White
+# â”€â”€ Summary â”€â”€
+Write-Output ""
+Write-Output "========================================" -ForegroundColor White
+Write-Output "  Validation Summary" -ForegroundColor Cyan
+Write-Output "========================================" -ForegroundColor White
 
 $passed = ($results | Where-Object { $_.Passed }).Count
 $failed = ($results | Where-Object { -not $_.Passed }).Count
@@ -252,12 +251,12 @@ $total  = $results.Count
 foreach ($r in $results) {
     $icon = if ($r.Passed) { '[PASS]' } else { '[FAIL]' }
     $color = if ($r.Passed) { 'Green' } else { 'Red' }
-    Write-Host "  $icon $($r.Test)" -ForegroundColor $color
+    Write-Output "  $icon $($r.Test)" -ForegroundColor $color
 }
 
-Write-Host ""
-Write-Host "  Total: $total | Passed: $passed | Failed: $failed" -ForegroundColor $(if ($failed -eq 0) { 'Green' } else { 'Yellow' })
-Write-Host "========================================" -ForegroundColor White
+Write-Output ""
+Write-Output "  Total: $total | Passed: $passed | Failed: $failed" -ForegroundColor $(if ($failed -eq 0) { 'Green' } else { 'Yellow' })
+Write-Output "========================================" -ForegroundColor White
 Write-Log "Validation complete: $passed/$total passed"
 
 if ($failed -gt 0) {

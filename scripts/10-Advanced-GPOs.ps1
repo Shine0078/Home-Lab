@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Applies advanced GPOs for enterprise-grade security hardening.
 
@@ -25,6 +25,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $DomainName = 'homelab.local'
+$DomainDN    = (($DomainName -split '\.') | ForEach-Object { "DC=$_" }) -join ','
 $LogDir     = Join-Path $PSScriptRoot '..\logs'
 $LogFile    = Join-Path $LogDir 'advanced-gpos.log'
 $WorkstationsOU = "OU=Workstations,DC=homelab,DC=local"
@@ -36,22 +37,26 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 function New-OrGetGPO {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param([string]$Name, [string]$Comment)
     $existing = Get-GPO -Name $Name -ErrorAction SilentlyContinue
     if (-not $existing) {
-        $gpo = New-GPO -Name $Name -Comment $Comment
-        Write-Log "  Created GPO: $Name (ID: $($gpo.Id))"
-        return $gpo
+        if ($PSCmdlet.ShouldProcess($Name, 'Create GPO')) {
+            $gpo = New-GPO -Name $Name -Comment $Comment
+            Write-Log "  Created GPO: $Name (ID: $($gpo.Id))"
+            return $gpo
+        }
     }
     Write-Log "  GPO '$Name' already exists. Updating..."
     return $existing
 }
 
 function Set-GPOLinkIfMissing {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param([string]$GPOName, [string]$TargetOU)
     $inheritance = Get-GPInheritance -Target $TargetOU -ErrorAction SilentlyContinue
     $isLinked = $false
@@ -61,9 +66,11 @@ function Set-GPOLinkIfMissing {
         }
     }
     if (-not $isLinked) {
-        $gpo = Get-GPO -Name $GPOName
-        New-GPLink -Guid $gpo.Id -Target $TargetOU -LinkEnabled Yes | Out-Null
-        Write-Log "  Linked '$GPOName' to $TargetOU"
+        if ($PSCmdlet.ShouldProcess($TargetOU, "Link GPO $GPOName")) {
+            $gpo = Get-GPO -Name $GPOName
+            New-GPLink -Guid $gpo.Id -Target $TargetOU -LinkEnabled Yes | Out-Null
+            Write-Log "  Linked '$GPOName' to $TargetOU"
+        }
     }
     else {
         Write-Log "  GPO already linked to $TargetOU"
@@ -75,7 +82,7 @@ Import-Module ActiveDirectory -ErrorAction Stop
 
 Write-Log "=== Advanced GPO Configuration ==="
 
-# ── GPO 1: Block Executables from AppData/Temp ──
+# â”€â”€ GPO 1: Block Executables from AppData/Temp â”€â”€
 $asrGPOName = 'Block-AppData-Executables'
 Write-Log "1. Creating GPO: $asrGPOName"
 $gpo = New-OrGetGPO -Name $asrGPOName -Comment 'Blocks exe execution from user-writable directories (ASR)'
@@ -88,7 +95,7 @@ Set-GPRegistryValue -Name $asrGPOName -Key $srpKey -ValueName 'PolicyScope' -Typ
 Write-Log "  Software Restriction Policy configured (DefaultLevel: disallow)"
 Set-GPOLinkIfMissing -GPOName $asrGPOName -TargetOU $WorkstationsOU
 
-# ── GPO 2: Screen Lock Timeout (15 minutes) ──
+# â”€â”€ GPO 2: Screen Lock Timeout (15 minutes) â”€â”€
 $lockGPOName = 'Screen-Lock-Timeout'
 Write-Log "2. Creating GPO: $lockGPOName"
 $gpo = New-OrGetGPO -Name $lockGPOName -Comment 'Locks screen after 15 minutes of inactivity'
@@ -103,7 +110,7 @@ Set-GPRegistryValue -Name $lockGPOName `
 Write-Log "  Screen lock: 900s (15 min), secure on resume"
 Set-GPOLinkIfMissing -GPOName $lockGPOName -TargetOU $WorkstationsOU
 
-# ── GPO 3: Legal Warning Banner ──
+# â”€â”€ GPO 3: Legal Warning Banner â”€â”€
 $bannerGPOName = 'Legal-Warning-Banner'
 Write-Log "3. Creating GPO: $bannerGPOName"
 $gpo = New-OrGetGPO -Name $bannerGPOName -Comment 'Displays legal warning on logon screen'
@@ -117,9 +124,9 @@ Set-GPRegistryValue -Name $bannerGPOName `
     -ValueName 'LegalNoticeCaption' -Type String -Value 'AD-HomeLab Authorized Use Only' | Out-Null
 Write-Log "  Legal banner configured (caption + text)"
 # Link to domain root so it applies to all machines
-Set-GPOLinkIfMissing -GPOName $bannerGPOName -TargetOU "DC=homelab,DC=local"
+Set-GPOLinkIfMissing -GPOName $bannerGPOName -TargetOU $DomainDN
 
-# ── GPO 4: Disable Guest and Restrict Local Accounts ──
+# â”€â”€ GPO 4: Disable Guest and Restrict Local Accounts â”€â”€
 $accountGPOName = 'Local-Account-Hardening'
 Write-Log "4. Creating GPO: $accountGPOName"
 $gpo = New-OrGetGPO -Name $accountGPOName -Comment 'Disables Guest account and restricts local account access'
@@ -135,28 +142,28 @@ Set-GPRegistryValue -Name $accountGPOName `
     -Key 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' `
     -ValueName 'LocalAccountTokenFilterPolicy' -Type DWord -Value 0 | Out-Null
 Write-Log "  LocalAccountTokenFilterPolicy: 0 (UAC for local accounts)"
-Set-GPOLinkIfMissing -GPOName $accountGPOName -TargetOU "DC=homelab,DC=local"
+Set-GPOLinkIfMissing -GPOName $accountGPOName -TargetOU $DomainDN
 
-# ── GPO 5: Windows Firewall Hardening ──
+# â”€â”€ GPO 5: Windows Firewall Hardening â”€â”€
 $fwGPOName = 'Windows-Firewall-Hardening'
 Write-Log "5. Creating GPO: $fwGPOName"
 $gpo = New-OrGetGPO -Name $fwGPOName -Comment 'Enables Windows Firewall on all profiles with default deny inbound'
 
-# Domain profile
-$fwDomainKey = 'HKLM\SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile'
-Set-GPRegistryValue -Name $fwGPOName -Key $fwDomainKey -ValueName 'EnableFirewall' -Type DWord -Value 1 | Out-Null
-Set-GPRegistryValue -Name $fwGPOName -Key "$fwDomainKey\DefaultInboundAction" -ValueName 'Action' -Type String -Value 'Block' | Out-Null
-Set-GPRegistryValue -Name $fwGPOName -Key "$fwDomainKey\DefaultOutboundAction" -ValueName 'Action' -Type String -Value 'Allow' | Out-Null
-Write-Log "  Domain profile: enabled, inbound blocked, outbound allowed"
+$fwProfiles = @(
+    @{ Name = 'DomainProfile'; Key = 'HKLM\SOFTWARE\Policies\Microsoft\WindowsFirewall\DomainProfile' }
+    @{ Name = 'StandardProfile'; Key = 'HKLM\SOFTWARE\Policies\Microsoft\WindowsFirewall\StandardProfile' }
+    @{ Name = 'PublicProfile'; Key = 'HKLM\SOFTWARE\Policies\Microsoft\WindowsFirewall\PublicProfile' }
+)
 
-# Standard profile
-$fwStdKey = 'HKLM\SOFTWARE\Policies\Microsoft\WindowsFirewall\StandardProfile'
-Set-GPRegistryValue -Name $fwGPOName -Key $fwStdKey -ValueName 'EnableFirewall' -Type DWord -Value 1 | Out-Null
-Set-GPRegistryValue -Name $fwGPOName -Key "$fwStdKey\DefaultInboundAction" -ValueName 'Action' -Type String -Value 'Block' | Out-Null
-Write-Log "  Standard profile: enabled, inbound blocked"
-Set-GPOLinkIfMissing -GPOName $fwGPOName -TargetOU "DC=homelab,DC=local"
+foreach ($fwProfile in $fwProfiles) {
+    Set-GPRegistryValue -Name $fwGPOName -Key $fwProfile.Key -ValueName 'EnableFirewall' -Type DWord -Value 1 | Out-Null
+    Set-GPRegistryValue -Name $fwGPOName -Key $fwProfile.Key -ValueName 'DefaultInboundAction' -Type DWord -Value 1 | Out-Null
+    Set-GPRegistryValue -Name $fwGPOName -Key $fwProfile.Key -ValueName 'DefaultOutboundAction' -Type DWord -Value 2 | Out-Null
+}
+Write-Log "  Firewall profiles: enabled, inbound blocked, outbound allowed"
+Set-GPOLinkIfMissing -GPOName $fwGPOName -TargetOU $DomainDN
 
-# ── GPO 6: Disable Unnecessary Services on Workstations ──
+# â”€â”€ GPO 6: Disable Unnecessary Services on Workstations â”€â”€
 $svcGPOName = 'Disable-Unnecessary-Services'
 Write-Log "6. Creating GPO: $svcGPOName"
 $gpo = New-OrGetGPO -Name $svcGPOName -Comment 'Disables Remote Registry and WinRM on workstations'
@@ -172,7 +179,7 @@ Set-GPRegistryValue -Name $svcGPOName -Key $werKey -ValueName 'Disabled' -Type D
 Write-Log "  Windows Error Reporting: disabled"
 Set-GPOLinkIfMissing -GPOName $svcGPOName -TargetOU $WorkstationsOU
 
-# ── Force GPUpdate on Clients ──
+# â”€â”€ Force GPUpdate on Clients â”€â”€
 Write-Log "7. Forcing GPUpdate on clients..."
 $clients = @('WIN11-CLIENT01', 'WIN11-CLIENT02')
 foreach ($client in $clients) {

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Vagrant provisioner script for DC01 (domain controller setup).
 
@@ -9,7 +9,18 @@
     scripts/01-Setup-DC.ps1.
 #>
 
-Write-Host "=== Vagrant Provisioner: DC01 ==="
+Write-Output "=== Vagrant Provisioner: DC01 ==="
+
+function ConvertTo-SecurePassword {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $secure = New-Object System.Security.SecureString
+    foreach ($char in $Text.ToCharArray()) {
+        $secure.AppendChar($char)
+    }
+    $secure.MakeReadOnly()
+    return $secure
+}
 
 # Set static IP
 $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
@@ -20,7 +31,7 @@ Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses '12
 Install-WindowsFeature -Name AD-Domain-Services, DNS, DHCP -IncludeManagementTools | Out-Null
 
 # Promote to DC
-$dsrmPassword = ConvertTo-SecureString 'LabAdm1n!2026' -AsPlainText -Force
+$dsrmPassword = ConvertTo-SecurePassword 'LabAdm1n!2026'
 Install-ADDSForest -DomainName 'homelab.local' -DomainNetbiosName 'HOMELAB' -SafeModeAdministratorPassword $dsrmPassword -InstallDNS -Force -NoReboot:$false
 
-Write-Host "DC01 provisioning initiated. VM will reboot."
+Write-Output "DC01 provisioning initiated. VM will reboot."

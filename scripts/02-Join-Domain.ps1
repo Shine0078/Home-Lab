@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Joins a Windows client to the homelab.local domain.
 
@@ -48,12 +48,12 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 Write-Log "=== Domain Join Script: $TargetHost ==="
 
-# ── Step 1: Check if already domain-joined AND flag exists ──
+# â”€â”€ Step 1: Check if already domain-joined AND flag exists â”€â”€
 $computerSystem = Get-CimInstance Win32_ComputerSystem
 if ($computerSystem.PartOfDomain -and (Test-Path $FlagFile)) {
     Write-Log "Computer already domain-joined to $($computerSystem.Domain) and flag file exists. Nothing to do."
@@ -65,7 +65,7 @@ if ($computerSystem.PartOfDomain -and -not (Test-Path $FlagFile)) {
     exit 0
 }
 
-# ── Step 2: Set DNS to DC01 ──
+# â”€â”€ Step 2: Set DNS to DC01 â”€â”€
 Write-Log "Setting DNS to $TargetDC..."
 $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
 if (-not $adapter) { throw "No active network adapter found." }
@@ -82,15 +82,15 @@ if (-not $dnsResolve) {
 }
 Write-Log "DNS resolution successful."
 
-# ── Step 3: Rename Computer (before domain join) ──
+# â”€â”€ Step 3: Rename Computer (before domain join) â”€â”€
 if ($env:COMPUTERNAME -ne $TargetHost) {
     Write-Log "Renaming computer from '$($env:COMPUTERNAME)' to '$TargetHost'..."
     Rename-Computer -NewName $TargetHost -Force
 
     $scriptPath = $MyInvocation.MyCommand.Path
-    $argString = "-ExecutionPolicy Bypass -File `"$scriptPath`" -TargetHost $TargetHost -TargetDC $TargetDC -DomainName $DomainName"
+    $argString = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" -TargetHost $TargetHost -TargetDC $TargetDC -DomainName $DomainName"
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $argString
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:COMPUTERNAME\Administrator"
+    $trigger = New-ScheduledTaskTrigger -AtStartup
     $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     Register-ScheduledTask -TaskName 'AD-HomeLab-Resume-DomainJoin' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
     Write-Log "Scheduled task created to resume domain join after reboot."
@@ -99,7 +99,7 @@ if ($env:COMPUTERNAME -ne $TargetHost) {
     exit 0
 }
 
-# ── Step 4: Join Domain ──
+# â”€â”€ Step 4: Join Domain â”€â”€
 Write-Log "Joining domain $DomainName..."
 $credential = Get-Credential -Message "Enter domain admin credentials for $DomainName (use HOMELAB\Administrator)"
 $ouPath = "OU=Workstations,DC=homelab,DC=local"
@@ -122,7 +122,7 @@ catch {
     throw
 }
 
-# ── Step 5: Cleanup and Reboot ──
+# â”€â”€ Step 5: Cleanup and Reboot â”€â”€
 Unregister-ScheduledTask -TaskName 'AD-HomeLab-Resume-DomainJoin' -Confirm:$false -ErrorAction SilentlyContinue
 New-Item -Path $FlagFile -ItemType File -Force | Out-Null
 Write-Log "Domain join complete for $TargetHost. Rebooting..."

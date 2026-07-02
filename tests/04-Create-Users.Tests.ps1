@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Pester tests for scripts/04-Create-Users.ps1 with AD mocks.
 
@@ -36,18 +36,17 @@ Mock Get-ADUser {
     return $null
 }
 Mock New-ADUser {
-    param($SamAccountName, $Path, $AccountPassword, $ChangePasswordAtLogon, $Enabled, $PasswordNeverExpires)
-    $createdUsers[$SamAccountName] = @{
-        Path = $Path
-        ChangePasswordAtLogon = $ChangePasswordAtLogon
-        Enabled = $Enabled
-        PasswordNeverExpires = $PasswordNeverExpires
+    $createdUsers[$args[0]] = @{
+        Path = $args[8]
+        ChangePasswordAtLogon = $args[10]
+        Enabled = $args[11]
+        PasswordNeverExpires = $args[12]
     }
 }
-Mock ConvertTo-SecureString { return (New-Object System.Security.SecureString) }
+Mock ConvertTo-SecurePassword { return (New-Object System.Security.SecureString) }
 Mock Export-Csv { }
 Mock Out-Null { }
-Mock Write-Host { }
+Mock Write-Output { }
 Mock Add-Content { }
 Mock Get-Date { return [datetime]::Now }
 

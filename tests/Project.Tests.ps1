@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Pester tests for AD-HomeLab project.
 
@@ -13,7 +13,7 @@
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
 
-function Get-AllScripts {
+function Get-AllScript {
     $scripts = @()
     $dirs = @('scripts', 'hyperv', 'data', 'tests')
     foreach ($dir in $dirs) {
@@ -27,7 +27,7 @@ function Get-AllScripts {
 }
 
 Describe 'Script Syntax Validation' {
-    $allScripts = Get-AllScripts
+    $allScripts = Get-AllScript
 
     It 'All PowerShell scripts should parse without syntax errors' {
         $parseErrors = @()
@@ -45,7 +45,7 @@ Describe 'Script Syntax Validation' {
 }
 
 Describe 'Script Help Documentation' {
-    $allScripts = Get-AllScripts
+    $allScripts = Get-AllScript
 
     It 'All PowerShell scripts should have comment-based help (.SYNOPSIS)' {
         $missing = @()

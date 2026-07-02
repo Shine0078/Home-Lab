@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Provisions the two Windows 11 client VMs in Hyper-V.
 
@@ -41,10 +41,11 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 function New-ClientVM {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param([string]$Name)
 
     $existing = Get-VM -Name $Name -ErrorAction SilentlyContinue
@@ -56,32 +57,35 @@ function New-ClientVM {
     $vmHost = Get-VMHost
     $vhdPath = Join-Path $vmHost.DefaultVirtualHardDiskPath "$Name.vhdx"
 
-    New-VM -Name $Name `
-        -Generation 2 `
-        -MemoryStartupBytes $RAM `
-        -SwitchName $SwitchName `
-        -NewVHDPath $vhdPath `
-        -NewVHDSizeBytes $VHDXSize `
-        | Out-Null
+    if ($PSCmdlet.ShouldProcess($Name, 'Create Hyper-V client VM')) {
+        New-VM -Name $Name `
+            -Generation 2 `
+            -MemoryStartupBytes $RAM `
+            -SwitchName $SwitchName `
+            -NewVHDPath $vhdPath `
+            -NewVHDSizeBytes $VHDXSize `
+            | Out-Null
 
-    Set-VM -Name $Name `
-        -ProcessorCount $CPU `
-        -DynamicMemory `
-        -MemoryStartupBytes $RAM `
-        -MemoryMinimumBytes 1GB `
-        -MemoryMaximumBytes 8GB `
-        -AutomaticCheckpointsEnabled $false
+        Set-VM -Name $Name `
+            -ProcessorCount $CPU `
+            -DynamicMemory `
+            -MemoryStartupBytes $RAM `
+            -MemoryMinimumBytes 1GB `
+            -MemoryMaximumBytes 8GB `
+            -AutomaticCheckpointsEnabled $false
 
-    # Windows 11 requires Secure Boot and TPM 2.0
-    Set-VMFirmware -VMName $Name -EnableSecureBoot On -SecureBootTemplate MicrosoftWindows
-    Set-VMSecurity -VMName $Name -EncryptStateAndVirtualMachineTraffic $true
+        # Windows 11 requires Secure Boot and a vTPM.
+        Set-VMFirmware -VMName $Name -EnableSecureBoot On -SecureBootTemplate MicrosoftWindows
+        Set-VMKeyProtector -VMName $Name -NewLocalKeyProtector
+        Enable-VMTPM -VMName $Name
 
-    # Enable Guest Services for file copy via integration services
-    Enable-VMIntegrationService -VMName $Name -Name 'Guest Service Interface'
+        # Enable Guest Services for file copy via integration services
+        Enable-VMIntegrationService -VMName $Name -Name 'Guest Service Interface'
 
-    Write-Log "Created VM '$Name': 4GB RAM, 2 vCPU, 40GB VHDX (dynamic)"
-    Write-Log "  Secure Boot: Enabled (MicrosoftWindows template)"
-    Write-Log "  VHDX: $vhdPath"
+        Write-Log "Created VM '$Name': 4GB RAM, 2 vCPU, 40GB VHDX (dynamic)"
+        Write-Log "  Secure Boot: Enabled (MicrosoftWindows template)"
+        Write-Log "  VHDX: $vhdPath"
+    }
 }
 
 try {

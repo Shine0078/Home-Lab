@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Creates 50 AD user accounts from a CSV file.
 
@@ -36,10 +36,10 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
-function New-RandomPassword {
+function Get-RandomPassword {
     <#
     Generates a random password that meets Windows complexity requirements:
     - At least one uppercase letter
@@ -74,7 +74,18 @@ function New-RandomPassword {
     return -join $shuffled
 }
 
-# ── Read CSV ──
+function ConvertTo-SecurePassword {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $secure = New-Object System.Security.SecureString
+    foreach ($char in $Text.ToCharArray()) {
+        $secure.AppendChar($char)
+    }
+    $secure.MakeReadOnly()
+    return $secure
+}
+
+# â”€â”€ Read CSV â”€â”€
 if (-not (Test-Path $CSVPath)) {
     Write-Log "ERROR: CSV not found at $CSVPath. Run data/Generate-Users.ps1 first."
     throw "Users CSV not found at $CSVPath"
@@ -83,7 +94,7 @@ if (-not (Test-Path $CSVPath)) {
 $users = Import-Csv -Path $CSVPath
 Write-Log "Loaded $($users.Count) users from $CSVPath"
 
-# ── Create Users ──
+# â”€â”€ Create Users â”€â”€
 $credentials = [System.Collections.ArrayList]::new()
 $created = 0
 $skipped = 0
@@ -91,12 +102,11 @@ $failed = 0
 
 foreach ($user in $users) {
     $samAccount = "$($user.FirstName.ToLower()).$($user.LastName.ToLower())"
-    $upn        = "$samAccount@$DomainName"
-    $displayName = "$($user.FirstName) $($user.LastName)"
-
     # Sanitize SamAccountName (remove any invalid characters, truncate to 20)
     $samAccount = $samAccount -replace '[^a-zA-Z0-9._-]', ''
     if ($samAccount.Length -gt 20) { $samAccount = $samAccount.Substring(0, 20) }
+    $upn        = "$samAccount@$DomainName"
+    $displayName = "$($user.FirstName) $($user.LastName)"
 
     # Check if user already exists
     $existing = Get-ADUser -Filter "SamAccountName -eq '$samAccount'" -ErrorAction SilentlyContinue
@@ -113,8 +123,8 @@ foreach ($user in $users) {
         "OU=Staff,$DomainDN"
     }
 
-    $password = New-RandomPassword -Length 16
-    $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+    $password = Get-RandomPassword -Length 16
+    $securePassword = ConvertTo-SecurePassword -Text $password
 
     try {
         New-ADUser `
@@ -151,7 +161,7 @@ foreach ($user in $users) {
     }
 }
 
-# ── Output Credentials ──
+# â”€â”€ Output Credentials â”€â”€
 if ($credentials.Count -gt 0) {
     $credentials | Export-Csv -Path $OutputCSV -NoTypeInformation -Force
     Write-Log "Credentials exported to $OutputCSV ($($credentials.Count) records)"

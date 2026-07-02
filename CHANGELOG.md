@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Corrected the DHCP scope ID in `scripts/01-Setup-DC.ps1` so scope options target `10.0.0.0/24` instead of the host IP
+- Fixed client reboot resume logic in `scripts/02-Join-Domain.ps1` to use a startup trigger rather than logon timing
+- Reworked monitoring setup so WEF and alert tasks are event-triggered rather than placeholder logon tasks
+- Fixed GPO restore logic to read the backup manifest’s original display name instead of the backup folder name
+
+### Added
+- Added `scripts/00-Teardown-Lab.ps1` for safe lab cleanup of users, groups, GPOs, and monitoring tasks
+- Added troubleshooting notes and dependency guidance to the project documentation
+
+### Changed
+- Replaced the repo-wide `Write-Host` logging helpers with output-stream logging for cleaner automation and analyzer compliance
+- Aligned README/PROJECT language with the actual manual OS-installation step
+
 ## [1.0.0] - 2026-07-02
 
 ### Added — Phase 7: DSC

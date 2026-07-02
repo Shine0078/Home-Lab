@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Desired State Configuration for the AD-HomeLab domain controller.
 
@@ -24,17 +24,21 @@
     Part of AD-HomeLab Phase 7 (DSC).
 #>
 
-param(
-    [string]$DomainName = 'homelab.local',
-    [PSCredential]$DomainAdminPassword
-)
-
 Configuration LabDscConfiguration {
     param(
         [string]$NodeName = 'localhost',
         [string]$DomainName = 'homelab.local',
         [PSCredential]$DomainAdminPassword
     )
+
+    if ([string]::IsNullOrWhiteSpace($DomainName)) {
+        throw 'DomainName is required.'
+    }
+    if (-not $DomainAdminPassword) {
+        throw 'DomainAdminPassword is required.'
+    }
+
+    $DomainDN = (($DomainName -split '\.') | ForEach-Object { "DC=$_" }) -join ','
 
     Import-DscResource -ModuleName xActiveDirectory
     Import-DscResource -ModuleName xDhcpServer
@@ -43,7 +47,7 @@ Configuration LabDscConfiguration {
     Import-DscResource -ModuleName PSDesiredStateConfiguration
 
     Node $NodeName {
-        # ── Windows Features ──
+        # â”€â”€ Windows Features â”€â”€
         WindowsFeature ADDomainServices {
             Name   = 'AD-Domain-Services'
             Ensure = 'Present'
@@ -63,7 +67,7 @@ Configuration LabDscConfiguration {
             IncludeManagementTools = $true
         }
 
-        # ── Static IP Configuration ──
+        # â”€â”€ Static IP Configuration â”€â”€
         xIPAddress LabIP {
             IPAddress      = '10.0.0.10'
             InterfaceAlias = 'Ethernet'
@@ -79,7 +83,7 @@ Configuration LabDscConfiguration {
             DependsOn      = '[xIPAddress]LabIP'
         }
 
-        # ── AD Domain (new forest) ──
+        # â”€â”€ AD Domain (new forest) â”€â”€
         xADDomain HomelabForest {
             DomainName                    = $DomainName
             DomainAdministratorCredential = $DomainAdminPassword
@@ -89,10 +93,10 @@ Configuration LabDscConfiguration {
             DependsOn                     = '[WindowsFeature]ADDomainServices', '[xDnsServerAddress]DnsServer'
         }
 
-        # ── OU Structure ──
+        # â”€â”€ OU Structure â”€â”€
         xADOrganizationalUnit Staff {
             Name                            = 'Staff'
-            Path                            = "DC=homelab,DC=local"
+            Path                            = $DomainDN
             ProtectedFromAccidentalDeletion = $true
             Description                     = 'Staff user accounts (non-IT)'
             DependsOn                       = '[xADDomain]HomelabForest'
@@ -100,7 +104,7 @@ Configuration LabDscConfiguration {
 
         xADOrganizationalUnit IT {
             Name                            = 'IT'
-            Path                            = "DC=homelab,DC=local"
+            Path                            = $DomainDN
             ProtectedFromAccidentalDeletion = $true
             Description                     = 'IT department user accounts'
             DependsOn                       = '[xADDomain]HomelabForest'
@@ -108,13 +112,13 @@ Configuration LabDscConfiguration {
 
         xADOrganizationalUnit Workstations {
             Name                            = 'Workstations'
-            Path                            = "DC=homelab,DC=local"
+            Path                            = $DomainDN
             ProtectedFromAccidentalDeletion = $true
             Description                     = 'Domain-joined workstation computers'
             DependsOn                       = '[xADDomain]HomelabForest'
         }
 
-        # ── DHCP Scope ──
+        # â”€â”€ DHCP Scope â”€â”€
         xDhcpServerScope LabScope {
             Name        = 'AD-Lab-Scope'
             IPStartRange = '10.0.0.100'
@@ -133,7 +137,7 @@ Configuration LabDscConfiguration {
             DependsOn    = '[xDhcpServerScope]LabScope'
         }
 
-        # ── DNS Forwarders ──
+        # â”€â”€ DNS Forwarders â”€â”€
         xDnsServerForwarder ExternalForwarders {
             IPAddress  = @('8.8.8.8', '1.1.1.1')
             IsOverride = $true

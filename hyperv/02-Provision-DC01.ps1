@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Provisions the DC01 Domain Controller VM in Hyper-V.
 
@@ -34,7 +34,7 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 try {

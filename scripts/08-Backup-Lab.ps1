@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Backs up the AD-HomeLab environment (GPOs, AD users, VM checkpoints).
 
@@ -40,9 +40,9 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] [$Level] $Message"
     Add-Content -Path $LogFile -Value $entry
-    if ($Level -eq 'WARN') { Write-Host "  [WARN] $Message" -ForegroundColor Yellow }
-    elseif ($Level -eq 'ERROR') { Write-Host "  [ERROR] $Message" -ForegroundColor Red }
-    else { Write-Host "  $Message" -ForegroundColor Cyan }
+    if ($Level -eq 'WARN') { Write-Output "  [WARN] $Message" -ForegroundColor Yellow }
+    elseif ($Level -eq 'ERROR') { Write-Output "  [ERROR] $Message" -ForegroundColor Red }
+    else { Write-Output "  $Message" -ForegroundColor Cyan }
 }
 
 $timestamp = Get-Date -Format 'yyyy-MM-dd_HHmmss'
@@ -51,7 +51,7 @@ New-Item -ItemType Directory -Path $sessionBackupDir -Force | Out-Null
 
 Write-Log "=== AD-HomeLab Backup ($timestamp) ==="
 
-# ── 1. Backup GPOs ──
+# â”€â”€ 1. Backup GPOs â”€â”€
 Write-Log "1. Backing up GPOs..."
 $gpoBackupPath = Join-Path $sessionBackupDir 'gpos'
 New-Item -ItemType Directory -Path $gpoBackupPath -Force | Out-Null
@@ -59,7 +59,6 @@ New-Item -ItemType Directory -Path $gpoBackupPath -Force | Out-Null
 try {
     $allGPOs = Get-GPO -All -ErrorAction Stop
     foreach ($gpo in $allGPOs) {
-        $gpoBackupName = $gpo.DisplayName -replace '[^a-zA-Z0-9_-]', '_'
         try {
             Backup-GPO -Guid $gpo.Id -Path $gpoBackupPath -ErrorAction Stop | Out-Null
             Write-Log "  Backed up GPO: $($gpo.DisplayName)"
@@ -74,7 +73,7 @@ catch {
     Write-Log "  GPO backup failed: $($_.Exception.Message)" 'ERROR'
 }
 
-# ── 2. Export AD Users ──
+# â”€â”€ 2. Export AD Users â”€â”€
 Write-Log "2. Exporting AD users..."
 $usersBackupPath = Join-Path $sessionBackupDir 'ad-users-backup.csv'
 try {
@@ -88,7 +87,7 @@ catch {
     Write-Log "  User export failed: $($_.Exception.Message)" 'ERROR'
 }
 
-# ── 3. Export AD Groups and Memberships ──
+# â”€â”€ 3. Export AD Groups and Memberships â”€â”€
 Write-Log "3. Exporting AD group memberships..."
 $groupsBackupPath = Join-Path $sessionBackupDir 'ad-groups-backup.csv'
 try {
@@ -110,7 +109,7 @@ catch {
     Write-Log "  Group export failed: $($_.Exception.Message)" 'ERROR'
 }
 
-# ── 4. Export DNS Zone ──
+# â”€â”€ 4. Export DNS Zone â”€â”€
 Write-Log "4. Exporting DNS zone records..."
 $dnsBackupPath = Join-Path $sessionBackupDir 'dns-backup.csv'
 try {
@@ -128,7 +127,7 @@ catch {
     Write-Log "  DNS export failed: $($_.Exception.Message)" 'WARN'
 }
 
-# ── 5. Export AD OU Structure ──
+# â”€â”€ 5. Export AD OU Structure â”€â”€
 Write-Log "5. Exporting OU structure..."
 $ouBackupPath = Join-Path $sessionBackupDir 'ou-structure-backup.csv'
 try {
@@ -141,7 +140,7 @@ catch {
     Write-Log "  OU export failed: $($_.Exception.Message)" 'ERROR'
 }
 
-# ── 6. Export Password Policy ──
+# â”€â”€ 6. Export Password Policy â”€â”€
 Write-Log "6. Exporting password policy..."
 $policyBackupPath = Join-Path $sessionBackupDir 'password-policy-backup.xml'
 try {
@@ -153,12 +152,13 @@ catch {
     Write-Log "  Policy export failed: $($_.Exception.Message)" 'ERROR'
 }
 
-# ── 7. VM Checkpoints (if Hyper-V module available) ──
+# â”€â”€ 7. VM Checkpoints (if Hyper-V module available) â”€â”€
 Write-Log "7. Creating VM checkpoints..."
 $vmNames = @('DC01', 'WIN11-CLIENT01', 'WIN11-CLIENT02')
 $hyperAvailable = Get-Module -ListAvailable -Name Hyper-V -ErrorAction SilentlyContinue
+$hyperVService = Get-Service -Name vmms -ErrorAction SilentlyContinue
 
-if ($hyperAvailable -and -not (Test-Path 'C:\Windows\System32\vmms.exe')) {
+if ($hyperAvailable -and $hyperVService) {
     Write-Log "  Running on Hyper-V host. Creating checkpoints..."
     foreach ($vmName in $vmNames) {
         $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Restores the AD-HomeLab environment from a backup.
 
@@ -40,9 +40,20 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] [$Level] $Message"
     Add-Content -Path $LogFile -Value $entry
-    if ($Level -eq 'WARN') { Write-Host "  [WARN] $Message" -ForegroundColor Yellow }
-    elseif ($Level -eq 'ERROR') { Write-Host "  [ERROR] $Message" -ForegroundColor Red }
-    else { Write-Host "  $Message" -ForegroundColor Cyan }
+    if ($Level -eq 'WARN') { Write-Output "  [WARN] $Message" -ForegroundColor Yellow }
+    elseif ($Level -eq 'ERROR') { Write-Output "  [ERROR] $Message" -ForegroundColor Red }
+    else { Write-Output "  $Message" -ForegroundColor Cyan }
+}
+
+function ConvertTo-SecurePassword {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $secure = New-Object System.Security.SecureString
+    foreach ($char in $Text.ToCharArray()) {
+        $secure.AppendChar($char)
+    }
+    $secure.MakeReadOnly()
+    return $secure
 }
 
 if (-not (Test-Path $BackupPath)) {
@@ -52,7 +63,7 @@ if (-not (Test-Path $BackupPath)) {
 Write-Log "=== AD-HomeLab Restore ==="
 Write-Log "Backup source: $BackupPath"
 
-# ── 1. Restore GPOs ──
+# â”€â”€ 1. Restore GPOs â”€â”€
 $gpoBackupDir = Join-Path $BackupPath 'gpos'
 if (Test-Path $gpoBackupDir) {
     Write-Log "1. Restoring GPOs from $gpoBackupDir..."
@@ -61,8 +72,11 @@ if (Test-Path $gpoBackupDir) {
         $manifest = Join-Path $gpoBackup.FullName 'manifest.xml'
         if (Test-Path $manifest) {
             try {
-                $importedGPO = Import-GPO -BackupId ([xml](Get-Content $manifest)).BackupInfo.ID `
-                    -Path $gpoBackupDir -TargetName $gpoBackup.Name `
+                $manifestXml = [xml](Get-Content -Path $manifest -Raw)
+                $backupId = $manifestXml.BackupInfo.ID
+                $targetName = $manifestXml.BackupInfo.DisplayName
+                $importedGPO = Import-GPO -BackupId $backupId `
+                    -Path $gpoBackupDir -TargetName $targetName `
                     -CreateIfNeeded $true -ErrorAction Stop
                 Write-Log "  Restored GPO: $($importedGPO.DisplayName) (ID: $($importedGPO.Id))"
             }
@@ -76,7 +90,7 @@ else {
     Write-Log "1. No GPO backup directory found. Skipping GPO restore." 'WARN'
 }
 
-# ── 2. Restore AD Users ──
+# â”€â”€ 2. Restore AD Users â”€â”€
 $usersBackup = Join-Path $BackupPath 'ad-users-backup.csv'
 if (Test-Path $usersBackup) {
     Write-Log "2. Restoring AD users from $usersBackup..."
@@ -103,7 +117,7 @@ if (Test-Path $usersBackup) {
             }
 
             $tempPassword = -join ((48..57) + (65..90) + (97..122) + (33..38) | Get-Random -Count 16 | ForEach-Object { [char]$_ })
-            $securePassword = ConvertTo-SecureString $tempPassword -AsPlainText -Force
+            $securePassword = ConvertTo-SecurePassword -Text $tempPassword
 
             New-ADUser `
                 -SamAccountName $user.SamAccountName `
@@ -133,7 +147,7 @@ else {
     Write-Log "2. No user backup CSV found. Skipping user restore." 'WARN'
 }
 
-# ── 3. Restore Password Policy ──
+# â”€â”€ 3. Restore Password Policy â”€â”€
 $policyBackup = Join-Path $BackupPath 'password-policy-backup.xml'
 if (Test-Path $policyBackup) {
     Write-Log "3. Restoring password policy..."
@@ -160,12 +174,12 @@ else {
     Write-Log "3. No password policy backup found. Skipping." 'WARN'
 }
 
-# ── 4. Restore DNS (manual step) ──
+# â”€â”€ 4. Restore DNS (manual step) â”€â”€
 Write-Log "4. DNS restore is a manual step:"
 Write-Log "   Import DNS records from: $(Join-Path $BackupPath 'dns-backup.csv')"
 Write-Log "   Use Add-DnsServerResourceRecord for each record."
 
-# ── 5. VM Checkpoint Restore (manual step) ──
+# â”€â”€ 5. VM Checkpoint Restore (manual step) â”€â”€
 Write-Log "5. VM checkpoint restore is a manual step:"
 Write-Log "   Use Hyper-V Manager or: Restore-VMSnapshot -VMName <name> -Name <snapshot>"
 

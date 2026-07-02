@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Configures Group Policy Objects for the homelab.
 
@@ -31,7 +31,7 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 Import-Module GroupPolicy -ErrorAction Stop
@@ -39,7 +39,7 @@ Import-Module ActiveDirectory -ErrorAction Stop
 
 $ouPath = "OU=Workstations,DC=homelab,DC=local"
 
-# ── GPO 1: USB Storage Restriction ──
+# â”€â”€ GPO 1: USB Storage Restriction â”€â”€
 $usbGPOName = 'Restrict-USB-Storage'
 Write-Log "--- Creating GPO: $usbGPOName ---"
 
@@ -84,7 +84,7 @@ else {
     Write-Log "GPO already linked to $ouPath"
 }
 
-# ── GPO 2: Password Policy ──
+# â”€â”€ GPO 2: Password Policy â”€â”€
 Write-Log "--- Configuring Password Policy ---"
 
 # Password policy via Default Domain Policy using Set-ADDefaultDomainPasswordPolicy
@@ -109,15 +109,17 @@ Write-Log "  Max age: 60 days"
 Write-Log "  Lockout threshold: 5 attempts"
 Write-Log "  Lockout duration: 15 minutes"
 
-# ── Force GPUpdate on Clients ──
+# â”€â”€ Force GPUpdate on Clients â”€â”€
 Write-Log "--- Forcing GPUpdate on clients ---"
 $clients = @('WIN11-CLIENT01', 'WIN11-CLIENT02')
 foreach ($client in $clients) {
     $reachable = $false
     try {
-        $null = Test-Connection -ComputerName $client -Count 1 -Quiet -ErrorAction SilentlyContinue
-        $reachable = $?
-    } catch { }
+        $reachable = Test-Connection -ComputerName $client -Count 1 -Quiet -ErrorAction SilentlyContinue
+    }
+    catch {
+        Write-Log "WARNING: Could not test reachability for ${client}: $($_.Exception.Message)"
+    }
 
     if (-not $reachable) {
         Write-Log "WARNING: $client not reachable. Skipping gpupdate. Run 'Invoke-GPUpdate -Computer $client' manually later."
@@ -141,7 +143,7 @@ foreach ($client in $clients) {
     }
 }
 
-# ── Generate GPO Report ──
+# â”€â”€ Generate GPO Report â”€â”€
 $reportPath = Join-Path $LogDir 'gpo-report.html'
 try {
     Get-GPOReport -All -ReportType HTML -Path $reportPath -ErrorAction Stop

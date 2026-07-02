@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Applies security hardening baseline (STIG/CIS-inspired) to DC01.
 
@@ -34,33 +34,50 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] [$Level] $Message"
     Add-Content -Path $LogFile -Value $entry
-    if ($Level -eq 'WARN') { Write-Host "  [WARN] $Message" -ForegroundColor Yellow }
-    elseif ($Level -eq 'ERROR') { Write-Host "  [ERROR] $Message" -ForegroundColor Red }
-    else { Write-Host "  $Message" -ForegroundColor Cyan }
+    if ($Level -eq 'WARN') { Write-Output "  [WARN] $Message" -ForegroundColor Yellow }
+    elseif ($Level -eq 'ERROR') { Write-Output "  [ERROR] $Message" -ForegroundColor Red }
+    else { Write-Output "  $Message" -ForegroundColor Cyan }
+}
+
+function Set-RegistryDword {
+    [CmdletBinding(SupportsShouldProcess = $true)]
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][int]$Value
+    )
+
+    if ($PSCmdlet.ShouldProcess($Path, "Set registry DWORD $Name")) {
+        if (-not (Test-Path $Path)) {
+            New-Item -Path $Path -Force | Out-Null
+        }
+
+        New-ItemProperty -Path $Path -Name $Name -PropertyType DWord -Value $Value -Force | Out-Null
+    }
 }
 
 Write-Log "=== Security Hardening Baseline (STIG/CIS-inspired) ==="
 
-# ── 1. Disable NTLMv1 and LM ──
+# â”€â”€ 1. Disable NTLMv1 and LM â”€â”€
 Write-Log "1. Disabling NTLMv1 and LM authentication..."
 $ntlmPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'
-Set-ItemProperty -Path $ntlmPath -Name 'LmCompatibilityLevel' -Value 5 -Type DWord -Force
-Set-ItemProperty -Path $ntlmPath -Name 'NoLMA' -Value 1 -Type DWord -Force
+Set-RegistryDword -Path $ntlmPath -Name 'LmCompatibilityLevel' -Value 5
+Set-RegistryDword -Path $ntlmPath -Name 'NoLMA' -Value 1
 Write-Log "  LmCompatibilityLevel = 5 (NTLMv2 only, refuse LM/NTLMv1)"
 
-# ── 2. Require SMB signing ──
+# â”€â”€ 2. Require SMB signing â”€â”€
 Write-Log "2. Enabling SMB signing..."
 $smbServerPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
-Set-ItemProperty -Path $smbServerPath -Name 'RequireSecuritySignature' -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $smbServerPath -Name 'EnableSecuritySignature' -Value 1 -Type DWord -Force
+Set-RegistryDword -Path $smbServerPath -Name 'RequireSecuritySignature' -Value 1
+Set-RegistryDword -Path $smbServerPath -Name 'EnableSecuritySignature' -Value 1
 Write-Log "  SMB server signing: required"
 
 $smbClientPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
-Set-ItemProperty -Path $smbClientPath -Name 'RequireSecuritySignature' -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $smbClientPath -Name 'EnableSecuritySignature' -Value 1 -Type DWord -Force
+Set-RegistryDword -Path $smbClientPath -Name 'RequireSecuritySignature' -Value 1
+Set-RegistryDword -Path $smbClientPath -Name 'EnableSecuritySignature' -Value 1
 Write-Log "  SMB client signing: required"
 
-# ── 3. Disable Print Spooler on DC ──
+# â”€â”€ 3. Disable Print Spooler on DC â”€â”€
 Write-Log "3. Disabling Print Spooler (PrintNightmare mitigation)..."
 $spooler = Get-Service -Name Spooler -ErrorAction SilentlyContinue
 if ($spooler) {
@@ -74,7 +91,7 @@ else {
     Write-Log "  Print Spooler service not found (already absent)"
 }
 
-# ── 4. Set audit policy ──
+# â”€â”€ 4. Set audit policy â”€â”€
 Write-Log "4. Configuring audit policy..."
 $auditSettings = @(
     @{ Category = 'Logon';                          Subcategory = 'Logon';                         Setting = '/success:enable /failure:enable' }
@@ -91,9 +108,8 @@ $auditSettings = @(
 )
 
 foreach ($audit in $auditSettings) {
-    $cmd = "auditpol /set /subcategory:`"$($audit.Subcategory)`" $($audit.Setting)"
     try {
-        Invoke-Expression $cmd | Out-Null
+        & auditpol.exe /set /subcategory:"$($audit.Subcategory)" $audit.Setting | Out-Null
         Write-Log "  Audit: $($audit.Subcategory) -> $($audit.Setting)"
     }
     catch {
@@ -101,7 +117,7 @@ foreach ($audit in $auditSettings) {
     }
 }
 
-# ── 5. Enable Windows Defender ASR rules ──
+# â”€â”€ 5. Enable Windows Defender ASR rules â”€â”€
 Write-Log "5. Enabling Windows Defender ASR rules..."
 $asrRules = @(
     @{ Id = 'BE9BA2D9-53EA-4CDC-84E2-1A1FED5B7B5C'; Name = 'Block executable content from email' }
@@ -137,7 +153,7 @@ catch {
     Write-Log "  Windows Defender configuration failed: $($_.Exception.Message)" 'WARN'
 }
 
-# ── 6. Disable Guest account ──
+# â”€â”€ 6. Disable Guest account â”€â”€
 Write-Log "6. Disabling Guest account..."
 try {
     $guest = Get-LocalUser -Name 'Guest' -ErrorAction SilentlyContinue
@@ -150,22 +166,20 @@ catch {
     Write-Log "  Guest account: $($_.Exception.Message)" 'WARN'
 }
 
-# ── 7. Restrict anonymous LDAP access ──
+# â”€â”€ 7. Restrict anonymous LDAP access â”€â”€
 Write-Log "7. Restricting anonymous LDAP access..."
 $ldapPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\NTDS\Parameters'
-if (-not (Test-Path $ldapPath)) { New-Item -Path $ldapPath -Force | Out-Null }
-Set-ItemProperty -Path $ldapPath -Name 'LDAPAnonRestrictIsConfigured' -Value 1 -Type DWord -Force
-Set-ItemProperty -Path $ldapPath -Name 'LDAPAnonRestrict' -Value 1 -Type DWord -Force
+Set-RegistryDword -Path $ldapPath -Name 'LDAPAnonRestrictIsConfigured' -Value 1
+Set-RegistryDword -Path $ldapPath -Name 'LDAPAnonRestrict' -Value 1
 Write-Log "  Anonymous LDAP: restricted"
 
-# ── 8. Enable PowerShell script block logging ──
+# â”€â”€ 8. Enable PowerShell script block logging â”€â”€
 Write-Log "8. Enabling PowerShell script block logging..."
 $psLogPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'
-if (-not (Test-Path $psLogPath)) { New-Item -Path $psLogPath -Force | Out-Null }
-Set-ItemProperty -Path $psLogPath -Name 'EnableScriptBlockLogging' -Value 1 -Type DWord -Force
+Set-RegistryDword -Path $psLogPath -Name 'EnableScriptBlockLogging' -Value 1
 Write-Log "  Script block logging: enabled"
 
-# ── 9. Set Windows Firewall defaults ──
+# â”€â”€ 9. Set Windows Firewall defaults â”€â”€
 Write-Log "9. Configuring Windows Firewall..."
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow
 Write-Log "  All profiles: enabled, inbound blocked, outbound allowed"

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Generates the users.csv data file for bulk user creation.
 
@@ -67,4 +67,4 @@ for ($i = 0; $i -lt 50; $i++) {
 
 $OutputPath = Join-Path $PSScriptRoot 'users.csv'
 $Users | Export-Csv -Path $OutputPath -NoTypeInformation -Force
-Write-Host "Generated $($Users.Count) users -> $OutputPath"
+Write-Output "Generated $($Users.Count) users -> $OutputPath"

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Sets up Role-Based Access Control (RBAC) with security groups and OU delegation.
 
@@ -33,11 +33,12 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] [$Level] $Message"
     Add-Content -Path $LogFile -Value $entry
-    if ($Level -eq 'WARN') { Write-Host "  [WARN] $Message" -ForegroundColor Yellow }
-    else { Write-Host "  $Message" -ForegroundColor Cyan }
+    if ($Level -eq 'WARN') { Write-Output "  [WARN] $Message" -ForegroundColor Yellow }
+    else { Write-Output "  $Message" -ForegroundColor Cyan }
 }
 
 function New-GroupIfMissing {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$Name,
         [string]$Description,
@@ -46,7 +47,9 @@ function New-GroupIfMissing {
     )
     $existing = Get-ADGroup -Filter "Name -eq '$Name'" -ErrorAction SilentlyContinue
     if (-not $existing) {
-        New-ADGroup -Name $Name -GroupScope $GroupScope -Description $Description -Path $Path -ErrorAction Stop
+        if ($PSCmdlet.ShouldProcess($Name, 'Create AD group')) {
+            New-ADGroup -Name $Name -GroupScope $GroupScope -Description $Description -Path $Path -ErrorAction Stop
+        }
         Write-Log "  Created group: $Name ($GroupScope)"
     }
     else {
@@ -56,11 +59,11 @@ function New-GroupIfMissing {
 }
 
 function Set-OUDelegation {
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$OUPath,
         [string]$Trustee,
-        [string]$Right,
-        [string]$ObjectType = $null
+        [string]$Right
     )
     try {
         $trusteeObj = Get-ADGroup -Identity $Trustee -ErrorAction Stop
@@ -108,10 +111,12 @@ function Set-OUDelegation {
             }
         }
 
-        $acl = Get-Acl -Path "AD:\$OUPath"
-        $acl.AddAccessRule($ace)
-        Set-Acl -Path "AD:\$OUPath" -AclObject $acl
-        Write-Log "  Delegated '$Right' on $OUPath to $Trustee"
+        if ($PSCmdlet.ShouldProcess($OUPath, "Delegate $Right to $Trustee")) {
+            $acl = Get-Acl -Path "AD:\$OUPath"
+            $acl.AddAccessRule($ace)
+            Set-Acl -Path "AD:\$OUPath" -AclObject $acl
+            Write-Log "  Delegated '$Right' on $OUPath to $Trustee"
+        }
     }
     catch {
         Write-Log "  Delegation failed: $($_.Exception.Message)" 'WARN'
@@ -120,7 +125,7 @@ function Set-OUDelegation {
 
 Write-Log "=== RBAC Setup ==="
 
-# ── 1. Create Security Groups ──
+# â”€â”€ 1. Create Security Groups â”€â”€
 Write-Log "1. Creating role-based security groups..."
 
 $groups = @(
@@ -137,7 +142,7 @@ foreach ($group in $groups) {
     New-GroupIfMissing -Name $group.Name -Description $group.Description -GroupScope $group.Scope
 }
 
-# ── 2. Create a Groups OU to hold these groups ──
+# â”€â”€ 2. Create a Groups OU to hold these groups â”€â”€
 $groupsOU = "OU=Groups,$DomainDN"
 $existingOU = Get-ADOrganizationalUnit -Filter "Name -eq 'Groups'" -ErrorAction SilentlyContinue
 if (-not $existingOU) {
@@ -162,7 +167,7 @@ foreach ($group in $groups) {
     }
 }
 
-# ── 3. Delegate Permissions ──
+# â”€â”€ 3. Delegate Permissions â”€â”€
 Write-Log "3. Delegating OU permissions..."
 
 # IT Admins: full control of IT OU
@@ -185,7 +190,7 @@ Set-OUDelegation -OUPath "OU=Staff,$DomainDN" -Trustee 'GG-Finance-Users' -Right
 Set-OUDelegation -OUPath "OU=Staff,$DomainDN" -Trustee 'GG-Ops-Users' -Right 'ReadOnly'
 Set-OUDelegation -OUPath "OU=Staff,$DomainDN" -Trustee 'GG-HR-Users' -Right 'ReadOnly'
 
-# ── 4. Add IT users to IT-Admins group ──
+# â”€â”€ 4. Add IT users to IT-Admins group â”€â”€
 Write-Log "4. Populating group memberships..."
 $itUsers = Get-ADUser -Filter "Department -eq 'IT'" -SearchBase "OU=IT,$DomainDN" -ErrorAction SilentlyContinue
 if ($itUsers) {
@@ -193,7 +198,9 @@ if ($itUsers) {
         try {
             Add-ADGroupMember -Identity 'GG-IT-Admins' -Members $user.SamAccountName -ErrorAction SilentlyContinue
         }
-        catch { }
+        catch {
+            Write-Log "  Failed to add $($user.SamAccountName) to GG-IT-Admins: $($_.Exception.Message)" 'WARN'
+        }
     }
     Write-Log "  Added $($itUsers.Count) IT users to GG-IT-Admins"
 }
@@ -205,7 +212,7 @@ else {
 $salesUsers = Get-ADUser -Filter "Department -eq 'Sales'" -SearchBase "OU=Staff,$DomainDN" -ErrorAction SilentlyContinue
 if ($salesUsers) {
     foreach ($user in $salesUsers) {
-        try { Add-ADGroupMember -Identity 'GG-Sales-Users' -Members $user.SamAccountName -ErrorAction SilentlyContinue } catch { }
+        try { Add-ADGroupMember -Identity 'GG-Sales-Users' -Members $user.SamAccountName -ErrorAction SilentlyContinue } catch { Write-Log "  Failed to add $($user.SamAccountName) to GG-Sales-Users: $($_.Exception.Message)" 'WARN' }
     }
     Write-Log "  Added $($salesUsers.Count) Sales users to GG-Sales-Users"
 }
@@ -214,7 +221,7 @@ if ($salesUsers) {
 $finUsers = Get-ADUser -Filter "Department -eq 'Finance'" -SearchBase "OU=Staff,$DomainDN" -ErrorAction SilentlyContinue
 if ($finUsers) {
     foreach ($user in $finUsers) {
-        try { Add-ADGroupMember -Identity 'GG-Finance-Users' -Members $user.SamAccountName -ErrorAction SilentlyContinue } catch { }
+        try { Add-ADGroupMember -Identity 'GG-Finance-Users' -Members $user.SamAccountName -ErrorAction SilentlyContinue } catch { Write-Log "  Failed to add $($user.SamAccountName) to GG-Finance-Users: $($_.Exception.Message)" 'WARN' }
     }
     Write-Log "  Added $($finUsers.Count) Finance users to GG-Finance-Users"
 }

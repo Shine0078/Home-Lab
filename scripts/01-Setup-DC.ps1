@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Configures the Domain Controller (DC01) for homelab.local.
 
@@ -45,7 +45,7 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 function Test-ADReady {
@@ -74,7 +74,7 @@ function Install-FeatureIfMissing {
     }
 }
 
-# ── Step 1: Rename Computer ──
+# â”€â”€ Step 1: Rename Computer â”€â”€
 $currentName = $env:COMPUTERNAME
 if ($currentName -ne $TargetHost) {
     Write-Log "Renaming computer from '$currentName' to '$TargetHost'..."
@@ -95,7 +95,7 @@ else {
     Unregister-ScheduledTask -TaskName 'AD-HomeLab-Resume-DC' -Confirm:$false -ErrorAction SilentlyContinue
 }
 
-# ── Step 2: Set Static IP ──
+# â”€â”€ Step 2: Set Static IP â”€â”€
 Write-Log "Configuring static IP: $StaticIP/$PrefixLength..."
 $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
 if (-not $adapter) { throw "No active network adapter found." }
@@ -128,13 +128,13 @@ else {
     Write-Log "IP already configured as $StaticIP."
 }
 
-# ── Step 3: Install AD DS + DNS + DHCP ──
+# â”€â”€ Step 3: Install AD DS + DNS + DHCP â”€â”€
 Write-Log "--- Installing Windows Features ---"
 Install-FeatureIfMissing -FeatureName 'AD-Domain-Services'
 Install-FeatureIfMissing -FeatureName 'DNS'
 Install-FeatureIfMissing -FeatureName 'DHCP'
 
-# ── Step 4: Promote to Domain Controller ──
+# â”€â”€ Step 4: Promote to Domain Controller â”€â”€
 if (-not (Test-ADReady)) {
     Write-Log "Promoting to Domain Controller (new forest: $DomainName)..."
     $securePassword = Read-Host -Prompt "Enter DSRM password (min 8 chars)" -AsSecureString
@@ -152,7 +152,7 @@ else {
     Write-Log "Domain controller already promoted. Forest: $DomainName"
 }
 
-# ── Step 5: Create OU Structure ──
+# â”€â”€ Step 5: Create OU Structure â”€â”€
 Write-Log "Ensuring OU structure exists..."
 Import-Module ActiveDirectory -ErrorAction Stop
 
@@ -170,7 +170,7 @@ foreach ($ou in $ous) {
     }
 }
 
-# ── Step 6: Configure DNS Forwarders ──
+# â”€â”€ Step 6: Configure DNS Forwarders â”€â”€
 Write-Log "Configuring DNS forwarders..."
 $forwarders = Get-DnsServerForwarder -ErrorAction SilentlyContinue
 if (-not $forwarders -or $forwarders.IPAddress.Count -eq 0) {
@@ -181,7 +181,7 @@ else {
     Write-Log "DNS forwarders already configured."
 }
 
-# ── Step 7: Authorize DHCP and Create Scope ──
+# â”€â”€ Step 7: Authorize DHCP and Create Scope â”€â”€
 Write-Log "Configuring DHCP..."
 Import-Module DnsServer -ErrorAction SilentlyContinue
 
@@ -197,7 +197,9 @@ if ($dhcpFeature -and $dhcpFeature.Installed) {
                 break
             }
         }
-    } catch { }
+    } catch {
+        Write-Log "WARNING: Could not query DHCP authorization state: $($_.Exception.Message)"
+    }
 
     if (-not $dhcpAuthorized) {
         Add-DhcpServerInDC -IPAddress $StaticIP -DnsName "$TargetHost.$DomainName" -ErrorAction SilentlyContinue
@@ -216,7 +218,7 @@ if ($dhcpFeature -and $dhcpFeature.Installed) {
             -EndRange $DhcpEndRange `
             -SubnetMask $DhcpSubnetMask `
             -State Active
-        Set-DhcpServerv4OptionValue -ScopeId "$StaticIP/$PrefixLength" -DnsServer $DhcpDnsServer -Router $DhcpRouter -ErrorAction SilentlyContinue
+        Set-DhcpServerv4OptionValue -ScopeId '10.0.0.0' -DnsServer $DhcpDnsServer -Router $DhcpRouter -ErrorAction SilentlyContinue
         Write-Log "DHCP scope created: $DhcpStartRange - $DhcpEndRange"
     }
     else {

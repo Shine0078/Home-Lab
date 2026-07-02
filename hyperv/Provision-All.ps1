@@ -1,11 +1,11 @@
-<#
+﻿<#
 .SYNOPSIS
     Provisions all lab VMs and the virtual switch in one pass.
 
 .DESCRIPTION
     Runs the full Phase 1 Hyper-V setup: creates AD-Lab-Switch, DC01,
     WIN11-CLIENT01, and WIN11-CLIENT02. Each sub-step is idempotent.
-    VMs are created without an OS — manual ISO installation required.
+    VMs are created without an OS â€” manual ISO installation required.
 
 .NOTES
     Run as Administrator on the Hyper-V host.
@@ -28,7 +28,7 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Host $entry -ForegroundColor Cyan
+    Write-Output $entry -ForegroundColor Cyan
 }
 
 Write-Log "=== AD-HomeLab Hyper-V Setup ==="

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Pester tests for scripts/03-Configure-GPOs.ps1 with GPO mocks.
 
@@ -30,7 +30,7 @@ Mock Get-GPO {
 }
 
 Mock New-GPO {
-    param($Name, $Comment)
+    param($Name)
     $guid = [guid]::NewGuid().ToString()
     $mockGPOs[$Name] = $guid
     return [PSCustomObject]@{ Id = $guid; DisplayName = $Name }
@@ -79,7 +79,7 @@ Mock Invoke-GPUpdate { }
 Mock Get-GPOReport { }
 Mock Test-Connection { return $true }
 Mock Invoke-Command { }
-Mock Write-Host { }
+Mock Write-Output { }
 Mock Add-Content { }
 Mock Get-Date { return [datetime]::Now }
 Mock Out-Null { }
@@ -98,8 +98,7 @@ Describe '03-Configure-GPOs: USB Storage Restriction' {
         $gpoName = 'Restrict-USB-Storage'
         $existing = Get-GPO -Name $gpoName
         if (-not $existing) {
-            $gpo = New-GPO -Name $gpoName -Comment 'Test'
-            $gpo.DisplayName | Should Be $gpoName
+            (New-GPO -Name $gpoName -Comment 'Test').DisplayName | Should Be $gpoName
         }
         $mockGPOs.ContainsKey($gpoName) | Should Be $true
     }
@@ -119,7 +118,7 @@ Describe '03-Configure-GPOs: USB Storage Restriction' {
     It 'Should link GPO to OU=Workstations' {
         $gpoName = 'Restrict-USB-Storage'
         if (-not $mockGPOs.ContainsKey($gpoName)) {
-            $gpo = New-GPO -Name $gpoName -Comment 'Test'
+            New-GPO -Name $gpoName -Comment 'Test' | Out-Null
         }
         $ouPath = 'OU=Workstations,DC=homelab,DC=local'
         New-GPLink -Guid $mockGPOs[$gpoName] -Target $ouPath

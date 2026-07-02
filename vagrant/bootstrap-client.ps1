@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Vagrant provisioner script for Windows 11 clients (domain join).
 
@@ -29,7 +29,18 @@ param(
     [string]$DomainName
 )
 
-Write-Host "=== Vagrant Provisioner: $Hostname ==="
+function ConvertTo-SecurePassword {
+    param([Parameter(Mandatory = $true)][string]$Text)
+
+    $secure = New-Object System.Security.SecureString
+    foreach ($char in $Text.ToCharArray()) {
+        $secure.AppendChar($char)
+    }
+    $secure.MakeReadOnly()
+    return $secure
+}
+
+Write-Output "=== Vagrant Provisioner: $Hostname ==="
 
 # Set DNS to DC01
 $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
@@ -38,7 +49,7 @@ Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $Dc
 # Rename computer
 if ($env:COMPUTERNAME -ne $Hostname) {
     Rename-Computer -NewName $Hostname -Force
-    Write-Host "Computer renamed to $Hostname. Reboot required before domain join."
+    Write-Output "Computer renamed to $Hostname. Reboot required before domain join."
     # Vagrant will re-run provisioning after reboot
     exit 0
 }
@@ -46,9 +57,9 @@ if ($env:COMPUTERNAME -ne $Hostname) {
 # Join domain
 $credential = New-Object System.Management.Automation.PSCredential(
     'HOMELAB\Administrator',
-    (ConvertTo-SecureString 'LabAdm1n!2026' -AsPlainText -Force)
+    (ConvertTo-SecurePassword 'LabAdm1n!2026')
 )
 
 Add-Computer -DomainName $DomainName -Credential $credential -OUPath 'OU=Workstations,DC=homelab,DC=local' -NewName $Hostname -Force -Options JoinWithNewName
 
-Write-Host "$Hostname joined to $DomainName. Rebooting."
+Write-Output "$Hostname joined to $DomainName. Rebooting."
