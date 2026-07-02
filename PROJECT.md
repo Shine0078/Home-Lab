@@ -19,9 +19,11 @@ This project provisions a complete Active Directory environment on a single Hype
 │  │  │   DC01     │  │WIN11-     │  │WIN11-    ││   │
 │  │  │ 10.0.0.10  │  │CLIENT01   │  │CLIENT02  ││   │
 │  │  │            │  │DHCP       │  │DHCP      ││   │
-│  │  │ AD DS      │  │           │  │          ││   │
-│  │  │ DNS        │  │ Domain    │  │ Domain   ││   │
-│  │  │ DHCP       │  │ Joined    │  │ Joined   ││   │
+│  │  │ AD DS      │  │ Domain    │  │ Domain   ││   │
+│  │  │ DNS        │  │ Joined    │  │ Joined   ││   │
+│  │  │ DHCP       │  │ DHCP      │  │ DHCP     ││   │
+│  │  │ Scope:     │  │ Client    │  │ Client   ││   │
+│  │  │ .100-.200  │  │           │  │          ││   │
 │  │  │            │  │           │  │          ││   │
 │  │  │ Server     │  │ Win 11    │  │ Win 11   ││   │
 │  │  │ 2022 Std   │  │ Pro       │  │ Pro      ││   │
@@ -86,11 +88,15 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 
 | Phase | Script | Run On | Purpose |
 |-------|--------|--------|---------|
-| 2 | `scripts/01-Setup-DC.ps1` | DC01 | Configure domain controller |
+| 2 | `scripts/01-Setup-DC.ps1` | DC01 | Configure DC: IP, AD DS, DNS, DHCP, OUs |
 | 3 | `scripts/02-Join-Domain.ps1` | Each client | Join to homelab.local |
 | 4 | `scripts/03-Configure-GPOs.ps1` | DC01 | Create and link GPOs |
 | 5 | `scripts/04-Create-Users.ps1` | DC01 | Bulk create 50 users |
 | 6 | `scripts/05-Validate-Lab.ps1` | DC01 | Run full validation |
+
+> **Note on Phase 3**: The `-TargetHost` parameter is mandatory. Run with:
+> `.\02-Join-Domain.ps1 -TargetHost WIN11-CLIENT01` on client 1, and
+> `.\02-Join-Domain.ps1 -TargetHost WIN11-CLIENT02` on client 2.
 
 ## Script Details
 
@@ -108,10 +114,12 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 `scripts/01-Setup-DC.ps1` performs:
 - Static IP configuration (10.0.0.10/24)
 - Computer rename to DC01
-- AD DS + DNS role installation
+- AD DS + DNS + DHCP role installation
 - New forest promotion (homelab.local)
 - OU creation (Staff, IT, Workstations)
 - DNS forwarder configuration (8.8.8.8, 1.1.1.1)
+- DHCP scope creation (10.0.0.100-200/24) with DNS/router options
+- DHCP server authorization in Active Directory
 
 ### Phase 3 — Domain Join
 
@@ -139,11 +147,14 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 
 `scripts/05-Validate-Lab.ps1` confirms:
 - Domain controller operational
-- OU structure exists
-- Both clients domain-joined
-- Password policy enforced
-- GPOs created and linked
-- User count >= 50
+- OU structure exists (Staff, IT, Workstations)
+- Both clients domain-joined in AD
+- Password policy enforced (length, complexity, lockout, duration)
+- USB restriction GPO exists and linked to OU=Workstations
+- USBSTOR Start=4 registry value present in GPO
+- USB storage disabled on a reachable client (remote registry check)
+- GPO application verified via gpresult on a client
+- AD user count >= 50 in OU=Staff and OU=IT
 
 ## GPO Details
 
@@ -160,6 +171,16 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 - Account lockout threshold: 5 invalid attempts
 - Lockout duration: 15 minutes
 - Password history: 24 passwords
+
+## DHCP Configuration
+
+- **Scope name**: AD-Lab-Scope
+- **IP range**: 10.0.0.100 -- 10.0.0.200
+- **Subnet mask**: 255.255.255.0 (/24)
+- **DNS server**: 10.0.0.10 (DC01)
+- **Router/gateway**: 10.0.0.1
+- **AD authorization**: DHCP server authorized in AD on first run
+- **State**: Active
 
 ## Repository Structure
 
@@ -225,6 +246,19 @@ Ensure the static IP is configured and the network adapter is up before promotio
 - From host: `Test-WSMan -ComputerName <IP>`
 - Check Windows Firewall allows WinRM (port 5985/5986)
 
+### DHCP Scope Not Handing Out Addresses
+- Verify DHCP service is running: `Get-Service DHCPServer`
+- Verify DHCP is authorized in AD: `Get-DhcpServerInDC`
+- Check scope state: `Get-DhcpServerv4Scope`
+- Ensure clients are on the same virtual switch (AD-Lab-Switch)
+- Restart DHCP service: `Restart-Service DHCPServer -Force`
+
+### Windows 11 Installation Fails (TPM/Secure Boot)
+- Ensure the client VM has TPM enabled: `Get-VMSecurity -VMName WIN11-CLIENT01`
+- Verify Secure Boot template: `Get-VMFirmware -VMName WIN11-CLIENT01`
+- If TPM is missing, the provisioning script sets it via Set-VMSecurity
+- Host must support TPM 2.0 and virtualization-based security
+
 ## What This Demonstrates
 
 This project maps directly to real-world sysadmin and infrastructure skills:
@@ -233,6 +267,7 @@ This project maps directly to real-world sysadmin and infrastructure skills:
 |-----------|-------------------|
 | Hyper-V provisioning | Infrastructure-as-Code, VM lifecycle management |
 | Static IP + DNS | Network configuration, DNS architecture |
+| DHCP scope + authorization | IP address management, AD-integrated DHCP |
 | AD DS promotion | Domain controller deployment, forest design |
 | OU structure | Organizational unit design, delegation model |
 | GPO creation + linking | Group Policy management, security hardening |

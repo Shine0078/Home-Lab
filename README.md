@@ -11,16 +11,16 @@ See [PROJECT.md](PROJECT.md) for full documentation, prerequisites, and step-by-
 | Component | Description |
 |-----------|-------------|
 | `hyperv/` | Hyper-V VM provisioning scripts (switch, DC, clients) |
-| `scripts/` | Domain setup, join, GPO, user creation, validation |
+| `scripts/` | Domain setup, domain join, GPO, user creation, validation |
 | `data/` | User CSV dataset (50 accounts across 5 departments) |
-| `tests/` | Pester tests for script validation |
-| `.github/workflows/` | CI: PSScriptAnalyzer linting |
+| `tests/` | Pester tests for syntax, help, and data validation |
+| `.github/workflows/` | CI: PSScriptAnalyzer linting + Pester tests |
 
 ## Status
 
 - **Hypervisor**: Hyper-V (Windows 11 host)
 - **Domain**: homelab.local
-- **VMs**: DC01, WIN11-CLIENT01, WIN11-CLIENT02
+- **VMs**: DC01 (AD DS, DNS, DHCP), WIN11-CLIENT01, WIN11-CLIENT02
 - **GPOs**: USB storage restriction, password policy enforcement
 - **Users**: 50 bulk-created AD accounts via PowerShell
 
