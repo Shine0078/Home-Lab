@@ -43,3 +43,20 @@ jobs:
         shell: pwsh
         run: |
           Invoke-Pester -Path ./tests -Output Detailed -CI
+
+  gui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install GUI dependencies
+        working-directory: apps/mobile-web
+        run: npm install
+
+      - name: Validate GUI
+        working-directory: apps/mobile-web
+        run: npm test
