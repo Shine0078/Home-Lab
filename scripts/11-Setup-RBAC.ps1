@@ -33,8 +33,8 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] [$Level] $Message"
     Add-Content -Path $LogFile -Value $entry
-    if ($Level -eq 'WARN') { Write-Output "  [WARN] $Message" -ForegroundColor Yellow }
-    else { Write-Output "  $Message" -ForegroundColor Cyan }
+    if ($Level -eq 'WARN') { Write-Host "  [WARN] $Message" -ForegroundColor Yellow }
+    else { Write-Host "  $Message" -ForegroundColor Cyan }
 }
 
 function New-GroupIfMissing {

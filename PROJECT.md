@@ -111,7 +111,7 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 | `hyperv/01-Create-Switch.ps1` | Creates AD-Lab-Switch (internal) |
 | `hyperv/02-Provision-DC01.ps1` | Creates DC01 VM (4GB, 2 CPU, 60GB) |
 | `hyperv/03-Provision-Clients.ps1` | Creates WIN11-CLIENT01/02 (4GB, 2 CPU, 40GB, TPM/SecureBoot) |
-| `hyperv/04-Attach-ISO.ps1` | Attaches ISOs and stages unattend media for OS installation |
+| `hyperv/04-Attach-ISO.ps1` | Attaches ISOs and stages tokenized unattend media for OS installation |
 | `hyperv/Provision-All.ps1` | Runs all provisioning in sequence |
 | `hyperv/unattend/*.xml` | Unattend answer files for Server 2022 and Win11 |
 

@@ -36,10 +36,10 @@ function Write-Log {
     $entry = "[$timestamp] [$Level] $Message"
     Add-Content -Path $LogFile -Value $entry
     switch ($Level) {
-        'PASS'  { Write-Output "  [PASS] $Message" -ForegroundColor Green }
-        'FAIL'  { Write-Output "  [FAIL] $Message" -ForegroundColor Red }
-        'WARN'  { Write-Output "  [WARN] $Message" -ForegroundColor Yellow }
-        default { Write-Output "  $Message" -ForegroundColor Cyan }
+        'PASS'  { Write-Host "  [PASS] $Message" -ForegroundColor Green }
+        'FAIL'  { Write-Host "  [FAIL] $Message" -ForegroundColor Red }
+        'WARN'  { Write-Host "  [WARN] $Message" -ForegroundColor Yellow }
+        default { Write-Host "  $Message" -ForegroundColor Cyan }
     }
 }
 
@@ -51,9 +51,9 @@ function Add-Result {
 }
 
 Write-Output ""
-Write-Output "========================================" -ForegroundColor White
-Write-Output "  AD-HomeLab Validation" -ForegroundColor Cyan
-Write-Output "========================================" -ForegroundColor White
+Write-Host "========================================" -ForegroundColor White
+Write-Host "  AD-HomeLab Validation" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor White
 
 Import-Module ActiveDirectory -ErrorAction Stop
 Import-Module GroupPolicy -ErrorAction Stop
@@ -240,9 +240,9 @@ if ($customCount -ge 50) {
 
 # â”€â”€ Summary â”€â”€
 Write-Output ""
-Write-Output "========================================" -ForegroundColor White
-Write-Output "  Validation Summary" -ForegroundColor Cyan
-Write-Output "========================================" -ForegroundColor White
+Write-Host "========================================" -ForegroundColor White
+Write-Host "  Validation Summary" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor White
 
 $passed = ($results | Where-Object { $_.Passed }).Count
 $failed = ($results | Where-Object { -not $_.Passed }).Count
@@ -251,12 +251,12 @@ $total  = $results.Count
 foreach ($r in $results) {
     $icon = if ($r.Passed) { '[PASS]' } else { '[FAIL]' }
     $color = if ($r.Passed) { 'Green' } else { 'Red' }
-    Write-Output "  $icon $($r.Test)" -ForegroundColor $color
+    Write-Host "  $icon $($r.Test)" -ForegroundColor $color
 }
 
 Write-Output ""
-Write-Output "  Total: $total | Passed: $passed | Failed: $failed" -ForegroundColor $(if ($failed -eq 0) { 'Green' } else { 'Yellow' })
-Write-Output "========================================" -ForegroundColor White
+Write-Host "  Total: $total | Passed: $passed | Failed: $failed" -ForegroundColor $(if ($failed -eq 0) { 'Green' } else { 'Yellow' })
+Write-Host "========================================" -ForegroundColor White
 Write-Log "Validation complete: $passed/$total passed"
 
 if ($failed -gt 0) {

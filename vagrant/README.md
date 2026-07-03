@@ -19,6 +19,12 @@ This folder contains an alternative deployment method using [Vagrant](https://ww
 
 ## Usage
 
+Set a unique lab Administrator password before running Vagrant. The value is read from the environment and is not stored in git.
+
+```powershell
+$env:AD_HOMELAB_ADMIN_PASSWORD = 'Use-A-Unique-Lab-Password!'
+```
+
 ```bash
 # Start all VMs
 vagrant up
@@ -52,4 +58,4 @@ Edit the `Vagrantfile` to change:
 | `bootstrap-dc.ps1` | Installs AD DS, DNS, DHCP, promotes to forest |
 | `bootstrap-client.ps1` | Sets DNS, renames, joins domain |
 
-These are simplified versions of the scripts in `scripts/` — they use hardcoded credentials for the lab environment. In production, use secrets management.
+These are simplified versions of the scripts in `scripts/`. Credentials are passed from `AD_HOMELAB_ADMIN_PASSWORD`; in production, use a proper secrets manager such as Azure Key Vault, HashiCorp Vault, or Windows Credential Manager.

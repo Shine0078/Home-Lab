@@ -45,7 +45,7 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Output $entry -ForegroundColor Cyan
+    Write-Host $entry -ForegroundColor Cyan
 }
 
 function Test-ADReady {

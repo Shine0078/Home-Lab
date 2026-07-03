@@ -15,9 +15,14 @@
 # using Packer if a suitable box is not available.
 
 Vagrant.configure("2") do |config|
+  admin_password = ENV["AD_HOMELAB_ADMIN_PASSWORD"]
+  if admin_password.nil? || admin_password.empty?
+    raise "Set AD_HOMELAB_ADMIN_PASSWORD before running vagrant up. Example: $env:AD_HOMELAB_ADMIN_PASSWORD = 'Use-A-Unique-Lab-Password!'"
+  end
+
   config.vm.communicator = "winrm"
   config.winrm.username = "Administrator"
-  config.winrm.password = "LabAdm1n!2026"
+  config.winrm.password = admin_password
 
   # ── DC01: Windows Server 2022 Domain Controller ──
   config.vm.define "dc01" do |dc01|
@@ -39,7 +44,8 @@ Vagrant.configure("2") do |config|
       netmask: "255.255.255.0",
       gateway: "10.0.0.1"
 
-    dc01.vm.provision "shell", path: "vagrant/bootstrap-dc.ps1"
+    dc01.vm.provision "shell", path: "vagrant/bootstrap-dc.ps1",
+      args: [admin_password]
   end
 
   # ── WIN11-CLIENT01 ──
@@ -60,7 +66,7 @@ Vagrant.configure("2") do |config|
       type: "dhcp"
 
     client01.vm.provision "shell", path: "vagrant/bootstrap-client.ps1",
-      args: ["WIN11-CLIENT01", "10.0.0.10", "homelab.local"]
+      args: ["WIN11-CLIENT01", "10.0.0.10", "homelab.local", admin_password]
   end
 
   # ── WIN11-CLIENT02 ──
@@ -81,6 +87,6 @@ Vagrant.configure("2") do |config|
       type: "dhcp"
 
     client02.vm.provision "shell", path: "vagrant/bootstrap-client.ps1",
-      args: ["WIN11-CLIENT02", "10.0.0.10", "homelab.local"]
+      args: ["WIN11-CLIENT02", "10.0.0.10", "homelab.local", admin_password]
   end
 end

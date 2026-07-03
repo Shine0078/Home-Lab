@@ -9,6 +9,11 @@
     scripts/01-Setup-DC.ps1.
 #>
 
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$AdminPassword
+)
+
 Write-Output "=== Vagrant Provisioner: DC01 ==="
 
 function ConvertTo-SecurePassword {
@@ -31,7 +36,7 @@ Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses '12
 Install-WindowsFeature -Name AD-Domain-Services, DNS, DHCP -IncludeManagementTools | Out-Null
 
 # Promote to DC
-$dsrmPassword = ConvertTo-SecurePassword 'LabAdm1n!2026'
+$dsrmPassword = ConvertTo-SecurePassword $AdminPassword
 Install-ADDSForest -DomainName 'homelab.local' -DomainNetbiosName 'HOMELAB' -SafeModeAdministratorPassword $dsrmPassword -InstallDNS -Force -NoReboot:$false
 
 Write-Output "DC01 provisioning initiated. VM will reboot."

@@ -29,20 +29,20 @@ foreach ($path in $paths) {
         $errors = $null
         $null = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$errors)
         if ($errors) {
-            Write-Output "PARSE ERROR: $($file.Name)" -ForegroundColor Red
-            foreach ($e in $errors) { Write-Output "  $($e.Message)" -ForegroundColor Red }
+            Write-Host "PARSE ERROR: $($file.Name)" -ForegroundColor Red
+            foreach ($e in $errors) { Write-Host "  $($e.Message)" -ForegroundColor Red }
             $hasErrors = $true
         } else {
-            Write-Output "OK: $($file.Name)" -ForegroundColor Green
+            Write-Host "OK: $($file.Name)" -ForegroundColor Green
         }
     }
 }
 
 if ($hasErrors) {
     Write-Output ""
-    Write-Output "Syntax errors found!" -ForegroundColor Red
+    Write-Host "Syntax errors found!" -ForegroundColor Red
     exit 1
 } else {
     Write-Output ""
-    Write-Output "All scripts passed syntax check." -ForegroundColor Green
+    Write-Host "All scripts passed syntax check." -ForegroundColor Green
 }

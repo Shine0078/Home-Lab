@@ -26,7 +26,10 @@ param(
     [string]$DcIP,
 
     [Parameter(Mandatory = $true)]
-    [string]$DomainName
+    [string]$DomainName,
+
+    [Parameter(Mandatory = $true)]
+    [string]$AdminPassword
 )
 
 function ConvertTo-SecurePassword {
@@ -57,7 +60,7 @@ if ($env:COMPUTERNAME -ne $Hostname) {
 # Join domain
 $credential = New-Object System.Management.Automation.PSCredential(
     'HOMELAB\Administrator',
-    (ConvertTo-SecurePassword 'LabAdm1n!2026')
+    (ConvertTo-SecurePassword $AdminPassword)
 )
 
 Add-Computer -DomainName $DomainName -Credential $credential -OUPath 'OU=Workstations,DC=homelab,DC=local' -NewName $Hostname -Force -Options JoinWithNewName

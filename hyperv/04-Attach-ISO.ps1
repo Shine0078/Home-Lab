@@ -20,6 +20,12 @@
 .PARAMETER VMName
     Specific VM to provision. If omitted, provisions all three.
 
+.PARAMETER AdminPassword
+    Local Administrator password to inject into generated unattend media.
+    If omitted, the script prompts securely. Windows Setup requires the
+    password inside the temporary unattend VHDX, but no password is stored
+    in the repository.
+
 .NOTES
     Run as Administrator on the Hyper-V host.
     Part of AD-HomeLab Phase 1 (Automated ISO Provisioning).
@@ -36,7 +42,9 @@ param(
     [string]$Win11ISO,
 
     [ValidateSet('DC01', 'WIN11-CLIENT01', 'WIN11-CLIENT02')]
-    [string]$VMName
+    [string]$VMName,
+
+    [securestring]$AdminPassword
 )
 
 Set-StrictMode -Version Latest
@@ -52,7 +60,7 @@ function Write-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $entry = "[$timestamp] $Message"
     Add-Content -Path $LogFile -Value $entry
-    Write-Output $entry -ForegroundColor Cyan
+    Write-Host $entry -ForegroundColor Cyan
 }
 
 function New-UnattendVFD {
@@ -65,12 +73,18 @@ function New-UnattendVFD {
     #>
     param(
         [string]$UnattendPath,
-        [string]$OutputPath
+        [string]$OutputPath,
+        [string]$Name,
+        [string]$AdminPasswordPlain
     )
 
     if ($PSCmdlet.ShouldProcess($OutputPath, 'Create unattend staging volume')) {
         # Create a 4MB VHD
-        $vhdPath = Join-Path $OutputPath 'autounattend.vhdx'
+        $safeName = $Name -replace '[^a-zA-Z0-9_-]', '_'
+        $vhdPath = Join-Path $OutputPath "$safeName-autounattend.vhdx"
+        if (Test-Path $vhdPath) {
+            Remove-Item -Path $vhdPath -Force -ErrorAction SilentlyContinue
+        }
         New-VHD -Path $vhdPath -SizeBytes 4MB -Dynamic -ErrorAction SilentlyContinue | Out-Null
 
         # Mount, format as FAT32, copy file, dismount
@@ -79,8 +93,14 @@ function New-UnattendVFD {
         $partition = $disk | Initialize-Disk -PartitionStyle GPT -PassThru | New-Partition -UseMaximumSize -AssignDriveLetter
         Format-Volume -DriveLetter $partition.DriveLetter -FileSystem FAT32 -NewFileSystemLabel 'UNATTEND' -Force | Out-Null
 
+        $unattendContent = Get-Content -Path $UnattendPath -Raw
+        if ($unattendContent -notmatch '__ADMIN_PASSWORD__') {
+            throw "Unattend template does not contain __ADMIN_PASSWORD__ token: $UnattendPath"
+        }
+
         $destPath = "$($partition.DriveLetter):\autounattend.xml"
-        Copy-Item -Path $UnattendPath -Destination $destPath -Force
+        $unattendContent.Replace('__ADMIN_PASSWORD__', $AdminPasswordPlain) |
+            Set-Content -Path $destPath -Encoding UTF8 -Force
 
         Dismount-VHD -Path $vhdPath
         return $vhdPath
@@ -92,7 +112,8 @@ function Set-VMISOAttachment {
     param(
         [string]$Name,
         [string]$ISOPath,
-        [string]$UnattendFile
+        [string]$UnattendFile,
+        [string]$AdminPasswordPlain
     )
 
     $vm = Get-VM -Name $Name -ErrorAction SilentlyContinue
@@ -109,7 +130,7 @@ function Set-VMISOAttachment {
 
     # Create unattend VHD
     $unattendDir = Join-Path $PSScriptRoot 'unattend'
-    $vhdPath = New-UnattendVFD -UnattendPath $UnattendFile -OutputPath $unattendDir
+    $vhdPath = New-UnattendVFD -UnattendPath $UnattendFile -OutputPath $unattendDir -Name $Name -AdminPasswordPlain $AdminPasswordPlain
 
     if ($PSCmdlet.ShouldProcess($Name, 'Attach installation media and start VM')) {
         # Remove existing DVD drives
@@ -148,6 +169,20 @@ function Set-VMISOAttachment {
 if (-not (Test-Path $ServerISO)) { throw "Server ISO not found: $ServerISO" }
 if (-not (Test-Path $Win11ISO))  { throw "Win11 ISO not found: $Win11ISO" }
 
+if (-not $AdminPassword) {
+    $AdminPassword = Read-Host -Prompt 'Enter local Administrator password for generated unattend media' -AsSecureString
+}
+
+$adminPasswordBstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($AdminPassword)
+try {
+    $adminPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($adminPasswordBstr)
+}
+finally {
+    if ($adminPasswordBstr -ne [IntPtr]::Zero) {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($adminPasswordBstr)
+    }
+}
+
 Write-Log "=== ISO Attachment ==="
 Write-Log "Server ISO: $ServerISO"
 Write-Log "Win11 ISO: $Win11ISO"
@@ -161,7 +196,7 @@ $vmConfigs = @(
 foreach ($config in $vmConfigs) {
     if ($VMName -and $config.Name -ne $VMName) { continue }
     $unattendPath = Join-Path $PSScriptRoot "unattend\$($config.Unattend)"
-    Set-VMISOAttachment -Name $config.Name -ISOPath $config.ISO -UnattendFile $unattendPath
+    Set-VMISOAttachment -Name $config.Name -ISOPath $config.ISO -UnattendFile $unattendPath -AdminPasswordPlain $adminPasswordPlain
 }
 
 Write-Log "=== ISO attachment complete ==="
