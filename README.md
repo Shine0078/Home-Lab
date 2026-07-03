@@ -5,7 +5,7 @@
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1+-blue.svg)
 ![Tests](https://img.shields.io/badge/tests-Pester-green.svg)
 
-A fully scripted, portfolio-grade Active Directory home lab built on Hyper-V with Windows Server 2022 and Windows 11 Pro clients.
+A fully scripted, portfolio-grade Active Directory home lab built on Hyper-V with Windows Server 2022 and Windows 11 Pro clients, plus a cross-platform Expo dashboard for web, iOS, and Android.
 
 ## Quick Start (5 commands)
 
@@ -43,6 +43,7 @@ See [PROJECT.md](PROJECT.md) for full documentation, prerequisites, and step-by-
 | `docs/` | Architecture diagrams, runbooks, security baseline, cost analysis |
 | `config/` | GPO export directory |
 | `vagrant/` | Vagrant alternative with Hyper-V provider |
+| `apps/mobile-web/` | Expo React Native dashboard for web, iOS, and Android |
 | `.github/workflows/` | CI: PSScriptAnalyzer + Pester |
 
 ## Architecture
@@ -89,6 +90,19 @@ See [docs/architecture.mmd](docs/architecture.mmd) for the full diagram.
 | [docs/cost-analysis.md](docs/cost-analysis.md) | Cloud vs on-prem cost comparison |
 | [docs/demo-script.md](docs/demo-script.md) | Interview walkthrough |
 | [docs/runbooks/](docs/runbooks/) | 6 operational runbooks |
+| [apps/mobile-web/README.md](apps/mobile-web/README.md) | Cross-platform dashboard usage and security model |
+
+## Dashboard App
+
+The Expo dashboard turns the lab into a mobile-friendly operations console with screens for build phases, script safety, validation checks, security controls, and runbooks.
+
+```powershell
+cd apps/mobile-web
+npm install
+npm run web
+```
+
+The dashboard is intentionally read-only. It does not execute privileged PowerShell from web or mobile; use it as a command reference and runbook interface unless a secured backend agent is added later.
 
 ## License
 

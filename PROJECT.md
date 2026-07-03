@@ -206,6 +206,18 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 - Auto-populates group memberships from user Department attribute
 - See `docs/rbac-matrix.md` for delegation matrix
 
+### Phase 11 — Cross-Platform Dashboard
+
+`apps/mobile-web/` provides an Expo React Native dashboard for web, iOS, and Android:
+- Dashboard overview with domain, topology, metrics, next step, and safety boundary
+- Build phase guide with commands and expected outcomes
+- Script catalog with run location, elevation requirements, and rerun safety notes
+- Validation checklist for AD, GPOs, clients, users, monitoring, and backup artifacts
+- Security control reference with implementation and evidence locations
+- Mobile-friendly runbook summaries for the six operational scenarios
+
+The dashboard is read-only by design. It does not execute PowerShell, store credentials, open WinRM sessions, or modify lab systems. Privileged changes remain local to the Hyper-V host, DC01, or client VMs until a properly authenticated and audited backend agent is implemented.
+
 ## GPO Details
 
 ### Restrict-USB-Storage
@@ -237,6 +249,7 @@ Once all VMs are installed and WinRM is reachable, run the scripts in order:
 ```
 AD-HomeLab/
 ├── .github/workflows/    # CI: PSScriptAnalyzer linting + Pester tests
+├── apps/mobile-web/      # Expo dashboard for web, iOS, and Android
 ├── config/gpo-exports/   # GPO backup export directory
 ├── data/                 # User CSV + monitored events dataset
 ├── docs/                 # Architecture, runbooks, security, cost, demo
@@ -275,6 +288,8 @@ Placeholders:
 - `docs/screenshots/gpo-password.png` — Password policy settings
 - `docs/screenshots/validation-pass.png` — All tests passing
 - `docs/screenshots/ad-users.png` — 50 users in ADUC
+- `docs/screenshots/dashboard-web.png` — Expo dashboard in a browser
+- `docs/screenshots/dashboard-mobile.png` — Expo dashboard on iOS or Android
 
 ## Troubleshooting
 
@@ -355,6 +370,8 @@ This project maps directly to real-world sysadmin and infrastructure skills:
 | Validation script | Infrastructure testing, health checks |
 | PowerShell module | Code reuse, packaging, API design |
 | Vagrant alternative | DevOps tooling, cross-platform IaC |
+| Expo dashboard | Cross-platform UI, TypeScript, mobile/web delivery |
+| Dashboard security model | Safe UX boundaries for privileged infrastructure automation |
 | CI pipeline | Code quality enforcement, automated testing |
 | Pester tests with mocks | Test-driven infrastructure, unit testing |
 | Runbooks (6) | Operational documentation, SOPs |

@@ -7,19 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added `apps/mobile-web/`, an Expo React Native dashboard for web, iOS, and Android
+- Added dashboard screens for lab overview, phases, scripts, validation checks, security controls, runbooks, and the app security model
+- Added GUI data validation and CI coverage for TypeScript and dashboard data integrity
+- Added dashboard documentation in `apps/mobile-web/README.md` and root README/PROJECT references
+- Added `scripts/00-Teardown-Lab.ps1` for safe lab cleanup of users, groups, GPOs, and monitoring tasks
+- Added troubleshooting notes and dependency guidance to the project documentation
+
 ### Fixed
 - Corrected the DHCP scope ID in `scripts/01-Setup-DC.ps1` so scope options target `10.0.0.0/24` instead of the host IP
 - Fixed client reboot resume logic in `scripts/02-Join-Domain.ps1` to use a startup trigger rather than logon timing
 - Reworked monitoring setup so WEF and alert tasks are event-triggered rather than placeholder logon tasks
 - Fixed GPO restore logic to read the backup manifest’s original display name instead of the backup folder name
-
-### Added
-- Added `scripts/00-Teardown-Lab.ps1` for safe lab cleanup of users, groups, GPOs, and monitoring tasks
-- Added troubleshooting notes and dependency guidance to the project documentation
+- Removed committed reusable lab passwords from Vagrant and unattend templates in favor of runtime password input
+- Replaced invalid `Write-Output -ForegroundColor` calls with appropriate console output calls
 
 ### Changed
-- Replaced the repo-wide `Write-Host` logging helpers with output-stream logging for cleaner automation and analyzer compliance
 - Aligned README/PROJECT language with the actual manual OS-installation step
+- Documented the dashboard as read-only by design; privileged lab execution remains local unless a secured backend agent is added
 
 ## [1.0.0] - 2026-07-02
 
