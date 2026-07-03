@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "AD-HomeLab Dashboard",
+    "slug": "ad-homelab-dashboard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "adhomelab",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "local.adhomelab.dashboard"
+    },
+    "android": {
+      "package": "local.adhomelab.dashboard",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
